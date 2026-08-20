@@ -43,6 +43,17 @@ function vehicleIcon(type) {
   return type === "moto" ? "🏍" : "🚗";
 }
 
+const FUEL_LABELS = {
+  gasolina: "Gasolina",
+  "gasolina-aditivada": "Gasolina Aditivada",
+  "gasolina-premium": "Gasolina Premium",
+  etanol: "Etanol",
+  "diesel-s10": "Diesel S10",
+};
+function fuelLabel(type) {
+  return FUEL_LABELS[type] || type;
+}
+
 /* ---------------- Auth ---------------- */
 let authMode = "login"; // "login" | "signup"
 
@@ -146,6 +157,15 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
   });
 });
 
+document.querySelectorAll(".settings-tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".settings-tab-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".settings-pane").forEach((p) => (p.hidden = true));
+    $("settings-pane-" + btn.dataset.settingsTab).hidden = false;
+  });
+});
+
 /* ================================================================
    VEÍCULOS
    ================================================================ */
@@ -168,6 +188,14 @@ function populateVehicleSelects() {
     .map((v) => `<option value="${v.id}">${vehicleIcon(v.type)} ${escapeHtml(v.name)}</option>`)
     .join("");
   if (active.some((v) => v.id === prevF)) fSel.value = prevF;
+
+  // filtro de veículo da exportação em PDF
+  const pdfSel = $("pdf-vehicle-filter");
+  const prevPdf = pdfSel.value || "all";
+  pdfSel.innerHTML =
+    `<option value="all">Todos os veículos</option>` +
+    active.map((v) => `<option value="${v.id}">${vehicleIcon(v.type)} ${escapeHtml(v.name)}</option>`).join("");
+  pdfSel.value = active.some((v) => v.id === prevPdf) ? prevPdf : "all";
 }
 $("dashboard-vehicle-filter").addEventListener("change", (e) => {
   dashboardFilter = e.target.value;
@@ -314,7 +342,7 @@ function fuelupCardHtml(f, calc) {
       <div class="entry-icon">${icon}</div>
       <div class="entry-main">
         <div class="entry-title">${escapeHtml(vName)} · ${fmtDateBR(f.date)}${f.nfceKey ? '<span class="nfce-badge">NF</span>' : ""}</div>
-        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${f.fuelType}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${Number(f.engineHours).toFixed(1)}h motor` : ""}</div>
+        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${fuelLabel(f.fuelType)}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${Number(f.engineHours).toFixed(1)}h motor` : ""}</div>
       </div>
       <div class="entry-metric">
         <strong>${fmtMoney(f.totalCost)}</strong>
@@ -364,19 +392,58 @@ function openFuelupModal(id) {
     $("fuelup-vehicle-kml").value = "";
     $("fuelup-notes").value = "";
   }
-  updatePricePerLiterPreview();
+  setFuelupMode("liters");
+  recomputeFuelupFields();
   $("fuelup-delete-btn").hidden = !f;
   $("fuelup-error").hidden = true;
   $("fuelup-modal").hidden = false;
 }
 
-function updatePricePerLiterPreview() {
-  const liters = parseFloat($("fuelup-liters").value);
-  const total = parseFloat($("fuelup-total").value);
-  $("fuelup-price-per-liter").value = liters > 0 && total > 0 ? fmtMoney(total / liters) : "";
+let fuelupMode = "liters";
+
+document.querySelectorAll("#fuelup-form .mode-btn").forEach((btn) => {
+  btn.addEventListener("click", () => setFuelupMode(btn.dataset.mode));
+});
+
+function setFuelupMode(mode) {
+  fuelupMode = mode;
+  document.querySelectorAll("#fuelup-form .mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+  const litersInput = $("fuelup-liters");
+  const priceInput = $("fuelup-price-per-liter");
+  const hint = $("fuelup-mode-hint");
+  if (mode === "liters") {
+    litersInput.readOnly = false;
+    litersInput.required = true;
+    priceInput.readOnly = true;
+    priceInput.type = "text";
+    priceInput.required = false;
+    hint.hidden = true;
+  } else {
+    litersInput.readOnly = true;
+    litersInput.required = false;
+    priceInput.readOnly = false;
+    priceInput.type = "number";
+    priceInput.step = "0.001";
+    priceInput.min = "0";
+    priceInput.required = true;
+    hint.hidden = false;
+  }
+  recomputeFuelupFields();
 }
-$("fuelup-liters").addEventListener("input", updatePricePerLiterPreview);
-$("fuelup-total").addEventListener("input", updatePricePerLiterPreview);
+
+function recomputeFuelupFields() {
+  const total = parseFloat($("fuelup-total").value);
+  if (fuelupMode === "liters") {
+    const liters = parseFloat($("fuelup-liters").value);
+    $("fuelup-price-per-liter").value = liters > 0 && total > 0 ? fmtMoney(total / liters) : "";
+  } else {
+    const price = parseFloat($("fuelup-price-per-liter").value);
+    $("fuelup-liters").value = price > 0 && total > 0 ? (total / price).toFixed(2) : "";
+  }
+}
+$("fuelup-liters").addEventListener("input", recomputeFuelupFields);
+$("fuelup-total").addEventListener("input", recomputeFuelupFields);
+$("fuelup-price-per-liter").addEventListener("input", recomputeFuelupFields);
 
 $("fuelup-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -662,6 +729,21 @@ function upsertChart(existing, canvasId, config) {
   return new Chart(ctx, config);
 }
 
+/* ---------------- Tema ---------------- */
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  try { localStorage.setItem("tanque-cheio-theme", theme); } catch (e) {}
+  document.querySelectorAll(".theme-btn").forEach((b) => b.classList.toggle("active", b.dataset.themeChoice === theme));
+}
+(function initTheme() {
+  let saved = "dark";
+  try { saved = localStorage.getItem("tanque-cheio-theme") || "dark"; } catch (e) {}
+  applyTheme(saved);
+})();
+document.querySelectorAll(".theme-btn").forEach((btn) => {
+  btn.addEventListener("click", () => applyTheme(btn.dataset.themeChoice));
+});
+
 /* ---------------- Exportar dados ---------------- */
 $("export-btn").addEventListener("click", () => {
   const payload = { exportedAt: new Date().toISOString(), vehicles, fuelups };
@@ -673,6 +755,64 @@ $("export-btn").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
   toast("Backup exportado.");
+});
+
+/* ---------------- Restaurar backup ---------------- */
+$("restore-btn").addEventListener("click", () => $("restore-file-input").click());
+$("restore-file-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+
+  const statusEl = $("restore-status");
+  statusEl.hidden = false;
+  statusEl.textContent = "Lendo arquivo...";
+
+  let payload;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch (err) {
+    statusEl.textContent = "Arquivo inválido — não parece um backup JSON do Tanque Cheio.";
+    return;
+  }
+
+  const vList = Array.isArray(payload.vehicles) ? payload.vehicles : [];
+  const fList = Array.isArray(payload.fuelups) ? payload.fuelups : [];
+  if (vList.length === 0 && fList.length === 0) {
+    statusEl.textContent = "Não encontrei veículos ou abastecimentos nesse arquivo.";
+    return;
+  }
+
+  if (!confirm(`Este backup tem ${vList.length} veículo(s) e ${fList.length} abastecimento(s). Registros com o mesmo ID serão atualizados; nada é apagado. Restaurar agora?`)) {
+    statusEl.hidden = true;
+    return;
+  }
+
+  statusEl.textContent = "Restaurando...";
+  try {
+    // Firestore permite até 500 operações por lote — divide se precisar
+    const ops = [];
+    vList.forEach((v) => {
+      const { id, ...data } = v;
+      ops.push(() => (id ? vehiclesCol().doc(id).set(data, { merge: true }) : vehiclesCol().add(data)));
+    });
+    fList.forEach((f) => {
+      const { id, ...data } = f;
+      ops.push(() => (id ? fuelupsCol().doc(id).set(data, { merge: true }) : fuelupsCol().add(data)));
+    });
+
+    // set/add não se misturam bem num batch manual quando não há id (add gera doc novo);
+    // por simplicidade e robustez, executa em paralelo em lotes menores.
+    const chunkSize = 400;
+    for (let i = 0; i < ops.length; i += chunkSize) {
+      const chunk = ops.slice(i, i + chunkSize);
+      await Promise.all(chunk.map((op) => op()));
+    }
+    statusEl.textContent = `Restauração concluída: ${vList.length} veículo(s) e ${fList.length} abastecimento(s) processados.`;
+    toast("Backup restaurado.");
+  } catch (err) {
+    statusEl.textContent = "Erro ao restaurar: " + err.message;
+  }
 });
 
 /* ---------------- Service worker ---------------- */
@@ -892,7 +1032,7 @@ function renderNfcePreview(result) {
 function applyNfceResult(result) {
   if (result.totalValue !== null) {
     $("fuelup-total").value = result.totalValue.toFixed(2);
-    updatePricePerLiterPreview();
+    recomputeFuelupFields();
   }
   if (result.date) $("fuelup-date").value = result.date;
   if (result.key) {
@@ -906,4 +1046,151 @@ function applyNfceResult(result) {
   $("nfce-preview").hidden = true;
   $("nfce-preview").innerHTML = "";
   toast("Dados da NFC-e aplicados — confira antes de salvar.");
+}
+
+/* ================================================================
+   EXPORTAR RELATÓRIO EM PDF
+   ================================================================ */
+let pdfPeriod = "week";
+
+document.querySelectorAll("[data-pdf-period]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    pdfPeriod = btn.dataset.pdfPeriod;
+    document.querySelectorAll("[data-pdf-period]").forEach((b) => b.classList.toggle("active", b === btn));
+    $("pdf-custom-range").hidden = pdfPeriod !== "custom";
+  });
+});
+
+$("pdf-generate-btn").addEventListener("click", generatePdfReport);
+
+function pdfDateRange() {
+  const today = new Date();
+  const toISODate = (d) => d.toISOString().slice(0, 10);
+
+  if (pdfPeriod === "week") {
+    const day = today.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+    return { from: toISODate(monday), to: todayISO() };
+  }
+  if (pdfPeriod === "month") {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { from: toISODate(first), to: todayISO() };
+  }
+  if (pdfPeriod === "all") {
+    return { from: "0001-01-01", to: "9999-12-31" };
+  }
+  // custom
+  return {
+    from: $("pdf-date-from").value || "0001-01-01",
+    to: $("pdf-date-to").value || "9999-12-31",
+  };
+}
+
+function generatePdfReport() {
+  const statusEl = $("pdf-status");
+  statusEl.hidden = false;
+  statusEl.textContent = "Gerando PDF...";
+
+  const { from, to } = pdfDateRange();
+  const vehicleFilterId = $("pdf-vehicle-filter").value;
+  const fuelFilter = $("pdf-fuel-filter").value;
+
+  let filtered = fuelups.filter((f) => f.date >= from && f.date <= to);
+  if (vehicleFilterId !== "all") filtered = filtered.filter((f) => f.vehicleId === vehicleFilterId);
+  if (fuelFilter !== "all") filtered = filtered.filter((f) => f.fuelType === fuelFilter);
+  filtered.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  if (filtered.length === 0) {
+    statusEl.textContent = "Nenhum abastecimento encontrado com esses filtros.";
+    return;
+  }
+  if (!window.jspdf) {
+    statusEl.textContent = "Não consegui carregar o gerador de PDF. Confira sua conexão e tente novamente.";
+    return;
+  }
+
+  // consumo calculado com base no histórico completo do(s) veículo(s) — mais preciso
+  // do que recalcular só com o recorte filtrado
+  const consumptionMap = computeConsumptionMap();
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  const vehicleLabel = vehicleFilterId === "all"
+    ? "Todos os veículos"
+    : (vehicles.find((v) => v.id === vehicleFilterId)?.name || "Veículo");
+  const fuelFilterLabel = fuelFilter === "all" ? "Todos os combustíveis" : fuelLabel(fuelFilter);
+  const periodLabel = pdfPeriod === "all"
+    ? "Todo o período"
+    : `${fmtDateBR(filtered[0].date)} a ${fmtDateBR(filtered[filtered.length - 1].date)}`;
+
+  doc.setFontSize(16);
+  doc.text("Tanque Cheio — Relatório de abastecimentos", 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(90);
+  doc.text(`Período: ${periodLabel}`, 14, 25);
+  doc.text(`Veículo: ${vehicleLabel}   ·   Combustível: ${fuelFilterLabel}`, 14, 30);
+  doc.text(`Gerado em ${fmtDateBR(todayISO())}`, 14, 35);
+
+  const rows = filtered.map((f) => {
+    const v = vehicles.find((x) => x.id === f.vehicleId);
+    const calc = consumptionMap.get(f.id);
+    return [
+      fmtDateBR(f.date),
+      v ? v.name : "—",
+      fmtKm(f.odometer) + " km",
+      Number(f.liters).toFixed(2) + " L",
+      fmtMoney(f.pricePerLiter),
+      fmtMoney(f.totalCost),
+      fuelLabel(f.fuelType),
+      calc ? calc.kmPerLiter.toFixed(2) : "—",
+    ];
+  });
+
+  doc.autoTable({
+    startY: 40,
+    head: [["Data", "Veículo", "Odômetro", "Litros", "R$/L", "Total", "Combustível", "km/l"]],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [232, 162, 61], textColor: [26, 18, 0] },
+    alternateRowStyles: { fillColor: [245, 245, 245] },
+  });
+
+  const totalCost = filtered.reduce((s, f) => s + Number(f.totalCost || 0), 0);
+  const totalLiters = filtered.reduce((s, f) => s + Number(f.liters || 0), 0);
+  const avgPrice = totalLiters > 0 ? totalCost / totalLiters : 0;
+
+  const byVehicleOdo = {};
+  filtered.forEach((f) => (byVehicleOdo[f.vehicleId] = byVehicleOdo[f.vehicleId] || []).push(f.odometer));
+  let totalKm = 0;
+  Object.values(byVehicleOdo).forEach((odos) => {
+    if (odos.length >= 2) totalKm += Math.max(...odos) - Math.min(...odos);
+  });
+
+  const kmlValues = filtered.map((f) => consumptionMap.get(f.id)).filter(Boolean).map((c) => c.kmPerLiter);
+  const avgKmL = kmlValues.length ? kmlValues.reduce((s, v) => s + v, 0) / kmlValues.length : null;
+
+  const finalY = doc.lastAutoTable.finalY + 10;
+  doc.setFontSize(11);
+  doc.setTextColor(20);
+  doc.text("Resumo", 14, finalY);
+  doc.setFontSize(10);
+  doc.setTextColor(60);
+  const summaryLines = [
+    `Total gasto: ${fmtMoney(totalCost)}`,
+    `Litros abastecidos: ${totalLiters.toFixed(2)} L`,
+    `Preço médio por litro: ${fmtMoney(avgPrice)}`,
+    `Km rodados no período (aprox.): ${totalKm > 0 ? fmtKm(totalKm) + " km" : "—"}`,
+    `Consumo médio: ${avgKmL !== null ? avgKmL.toFixed(2) + " km/l" : "—"}`,
+    `Abastecimentos no período: ${filtered.length}`,
+  ];
+  summaryLines.forEach((line, i) => doc.text(line, 14, finalY + 7 + i * 6));
+
+  const fileVehiclePart = vehicleFilterId === "all" ? "todos" : vehicleLabel.toLowerCase().replace(/\s+/g, "-");
+  const fileFuelPart = fuelFilter === "all" ? "todos" : fuelFilter;
+  doc.save(`tanque-cheio-${pdfPeriod}-${fileVehiclePart}-${fileFuelPart}.pdf`);
+
+  statusEl.textContent = "PDF gerado.";
 }

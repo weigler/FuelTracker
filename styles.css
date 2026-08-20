@@ -19,6 +19,30 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
+:root[data-theme="light"] {
+  --bg: #F4F1EA;
+  --bg-elevated: #FFFFFF;
+  --panel: #FFFFFF;
+  --panel-2: #ECE8DF;
+  --line: rgba(23,24,27,0.10);
+  --text: #201F1C;
+  --text-dim: #5C5A55;
+  --text-faint: #918E86;
+  --amber: #C97B25;
+  --amber-dim: #F0D6AC;
+  --teal: #1F6E65;
+  --red: #B03F35;
+  --shadow: 0 10px 24px rgba(30,25,15,0.10);
+}
+:root[data-theme="light"] .btn-primary { color: #fff; }
+:root[data-theme="light"] .hero-gauge-card {
+  background: radial-gradient(80% 80% at 50% 20%, rgba(201,123,37,0.10), transparent 65%), var(--bg-elevated);
+}
+:root[data-theme="light"] .topbar,
+:root[data-theme="light"] .tabbar { background: rgba(244,241,234,0.92); }
+:root[data-theme="light"] .compare-chip.ok { background: rgba(31,110,101,0.08); }
+:root[data-theme="light"] .compare-chip.off { background: rgba(176,63,53,0.08); }
+
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -28,6 +52,7 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  transition: background-color .2s ease, color .2s ease;
 }
 button, input, select { font-family: inherit; }
 :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
@@ -78,6 +103,28 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .field input:focus, .field select:focus { border-color: var(--amber); }
 .field-row { display: flex; gap: 10px; }
 .field-row .field { flex: 1; }
+.field-hint { font-size: 12px; color: var(--text-faint); line-height: 1.4; margin: -6px 0 0; }
+
+.mode-toggle {
+  display: flex;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 3px;
+}
+.mode-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.mode-btn.active { background: var(--amber); color: #1A1200; }
 
 .checkbox-field { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-dim); }
 .checkbox-field input { width: 18px; height: 18px; accent-color: var(--amber); }
@@ -337,6 +384,29 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .vehicle-chevron { color: var(--text-faint); }
 
 /* ================= SETTINGS ================= */
+.settings-tabs {
+  display: flex;
+  gap: 3px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  margin-bottom: 4px;
+}
+.settings-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 4px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.settings-tab-btn.active { background: var(--amber); color: #1A1200; }
+.settings-pane { display: flex; flex-direction: column; gap: 12px; }
+
 .settings-card { display: flex; flex-direction: column; gap: 12px; }
 .settings-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -344,6 +414,36 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
   padding: 14px; font-size: 13px; color: var(--text-dim); margin: 0;
 }
 .settings-row span:last-child { color: var(--text); font-family: var(--font-mono); }
+
+.settings-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 4px 0 -2px; }
+.settings-hint { font-size: 12px; color: var(--text-faint); line-height: 1.5; margin: -4px 0 0; }
+
+.theme-toggle {
+  display: flex;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 3px;
+}
+.theme-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.theme-btn.active { background: var(--amber); color: #1A1200; }
+
+.pdf-filter-grid { display: flex; flex-direction: column; gap: 12px; }
+.pdf-period-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.pdf-period-row .mode-btn { flex: 1; min-width: 78px; }
+.pdf-custom-range { display: flex; gap: 10px; }
+.pdf-custom-range .field { flex: 1; }
 
 /* ================= TABBAR ================= */
 .tabbar {

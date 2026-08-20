@@ -6,12 +6,15 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 
 - **Login por e-mail e senha** (Firebase Authentication)
 - **Veículos**: cadastro de múltiplos veículos (moto/carro), apelido, placa, arquivar ou excluir
-- **Abastecimentos**: km, litros, valor total (calcula R$/litro automaticamente), tipo de combustível, se foi tanque cheio
+- **Abastecimentos**: km, litros, valor total, tipo de combustível (Gasolina, Gasolina Aditivada, Gasolina Premium, Etanol, Diesel S10), se foi tanque cheio
+  - Dois jeitos de calcular: informe **litros + total** (calcula o R$/litro) ou, sem o cupom em mãos, informe **total pago no cartão + preço do litro anotado na bomba** (calcula os litros)
 - **Painel do veículo (opcional)**: tempo de motor ligado no tanque, velocidade média e consumo informados pelo computador de bordo — o app calcula os mesmos valores a partir do km e litros e mostra os dois lado a lado, com o desvio percentual, pra você conferir
 - **Importação por NFC-e**: escaneie o QR Code do cupom fiscal (pela câmera ou enviando uma foto) ou cole o código/URL manualmente, para preencher automaticamente valor total, data e o CNPJ do posto — veja limitações abaixo
 - **Painel** com ponteiro de km/l médio, gasto do mês, preço médio, km rodados e litros
 - **Gráficos**: consumo (km/l), preço do combustível e gasto mensal ao longo do tempo
-- **Exportar backup** em JSON (Ajustes → Exportar dados)
+- **Tema claro/escuro**, em Ajustes → Aparência (preferência salva no aparelho)
+- **Backup e restauração** em JSON, em Ajustes → Backup: exportar tudo, ou restaurar um arquivo (atualiza registros existentes pelo ID, não apaga nada)
+- **Exportar relatório em PDF**, em Ajustes → Exportar PDF: filtra por período (semana, mês, tudo ou datas personalizadas), por veículo (um ou todos) e por tipo de combustível (um ou todos); o PDF traz a tabela de abastecimentos e um resumo (total gasto, litros, km rodados, consumo médio)
 - **PWA instalável**, funciona offline para a interface (dados do Firestore precisam de internet)
 
 ## Estrutura de arquivos
@@ -77,5 +80,6 @@ O QR Code impresso no cupom da NFC-e sempre traz a **chave de acesso de 44 dígi
 ## Notas técnicas
 
 - Sem etapa de build — abre direto no navegador
-- Firebase via SDK compat (script tags), Chart.js e jsQR via CDN
+- Firebase via SDK compat (script tags), Chart.js, jsQR e jsPDF (+ autoTable) via CDN
 - `service-worker.js` cacheia apenas os arquivos da própria aplicação; chamadas ao Firestore nunca são cacheadas
+- O tema (claro/escuro) é salvo no `localStorage` do aparelho — é uma preferência de interface, não fica no Firestore, então pode variar entre dispositivos

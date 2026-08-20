@@ -18,6 +18,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="styles.css" />
+<script>
+  // Aplica o tema salvo o quanto antes, para evitar "flash" da cor errada
+  try {
+    var savedTheme = localStorage.getItem("tanque-cheio-theme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    }
+  } catch (e) {}
+</script>
 </head>
 <body>
 
@@ -159,10 +168,76 @@
       <div class="view-head">
         <h2>Ajustes</h2>
       </div>
-      <div class="settings-card">
-        <p class="settings-row"><span>Conta</span><span id="settings-email">—</span></p>
-        <button class="btn btn-secondary btn-block" id="export-btn">Exportar dados (JSON)</button>
-        <button class="btn btn-danger btn-block" id="settings-logout-btn">Sair da conta</button>
+
+      <div class="settings-tabs">
+        <button class="settings-tab-btn active" data-settings-tab="account">Conta</button>
+        <button class="settings-tab-btn" data-settings-tab="appearance">Aparência</button>
+        <button class="settings-tab-btn" data-settings-tab="backup">Backup</button>
+        <button class="settings-tab-btn" data-settings-tab="pdf">Exportar PDF</button>
+      </div>
+
+      <!-- Conta -->
+      <div class="settings-pane" id="settings-pane-account">
+        <div class="settings-card">
+          <p class="settings-row"><span>Conta</span><span id="settings-email">—</span></p>
+          <button class="btn btn-danger btn-block" id="settings-logout-btn">Sair da conta</button>
+        </div>
+      </div>
+
+      <!-- Aparência -->
+      <div class="settings-pane" id="settings-pane-appearance" hidden>
+        <p class="settings-section-title">Tema</p>
+        <div class="theme-toggle">
+          <button type="button" class="theme-btn" data-theme-choice="dark">🌙 Escuro</button>
+          <button type="button" class="theme-btn" data-theme-choice="light">☀️ Claro</button>
+        </div>
+      </div>
+
+      <!-- Backup -->
+      <div class="settings-pane" id="settings-pane-backup" hidden>
+        <p class="settings-section-title">Exportar</p>
+        <button class="btn btn-secondary btn-block" id="export-btn">Exportar backup (JSON)</button>
+        <p class="settings-section-title">Restaurar</p>
+        <p class="settings-hint">Restaurar um backup grava (ou atualiza) os veículos e abastecimentos do arquivo na sua conta. Registros já existentes com o mesmo ID são atualizados; nada é apagado.</p>
+        <input type="file" id="restore-file-input" accept="application/json" hidden />
+        <button class="btn btn-secondary btn-block" id="restore-btn">Restaurar backup (JSON)</button>
+        <p id="restore-status" class="settings-hint" hidden></p>
+      </div>
+
+      <!-- Exportar PDF -->
+      <div class="settings-pane" id="settings-pane-pdf" hidden>
+        <div class="pdf-filter-grid">
+          <div>
+            <p class="settings-section-title">Período</p>
+            <div class="pdf-period-row">
+              <button type="button" class="mode-btn active" data-pdf-period="week">Esta semana</button>
+              <button type="button" class="mode-btn" data-pdf-period="month">Este mês</button>
+              <button type="button" class="mode-btn" data-pdf-period="all">Tudo</button>
+              <button type="button" class="mode-btn" data-pdf-period="custom">Personalizado</button>
+            </div>
+          </div>
+          <div class="pdf-custom-range" id="pdf-custom-range" hidden>
+            <label class="field"><span>De</span><input type="date" id="pdf-date-from" /></label>
+            <label class="field"><span>Até</span><input type="date" id="pdf-date-to" /></label>
+          </div>
+          <label class="field">
+            <span>Veículo</span>
+            <select id="pdf-vehicle-filter"><option value="all">Todos os veículos</option></select>
+          </label>
+          <label class="field">
+            <span>Combustível</span>
+            <select id="pdf-fuel-filter">
+              <option value="all">Todos os combustíveis</option>
+              <option value="gasolina">Gasolina</option>
+              <option value="gasolina-aditivada">Gasolina Aditivada</option>
+              <option value="gasolina-premium">Gasolina Premium</option>
+              <option value="etanol">Etanol</option>
+              <option value="diesel-s10">Diesel S10</option>
+            </select>
+          </label>
+          <button class="btn btn-primary btn-block" id="pdf-generate-btn">Gerar PDF</button>
+          <p id="pdf-status" class="settings-hint" hidden></p>
+        </div>
       </div>
     </section>
 
@@ -221,6 +296,10 @@
         <span>Odômetro (km)</span>
         <input type="number" id="fuelup-odometer" min="0" step="1" inputmode="numeric" required />
       </label>
+      <div class="mode-toggle" role="group" aria-label="Como calcular">
+        <button type="button" class="mode-btn active" id="fuelup-mode-liters" data-mode="liters">Tenho os litros</button>
+        <button type="button" class="mode-btn" id="fuelup-mode-price" data-mode="price">Tenho o preço/litro</button>
+      </div>
       <div class="field-row">
         <label class="field">
           <span>Litros</span>
@@ -231,18 +310,21 @@
           <input type="number" id="fuelup-total" min="0" step="0.01" inputmode="decimal" required />
         </label>
       </div>
-      <label class="field">
+      <label class="field" id="fuelup-price-field">
         <span>R$ por litro</span>
         <input type="text" id="fuelup-price-per-liter" readonly />
       </label>
+      <p class="field-hint" id="fuelup-mode-hint" hidden>
+        Sem o cupom em mãos? Informe o valor total pago no cartão e o preço do litro anotado na bomba — os litros são calculados sozinhos.
+      </p>
       <label class="field">
         <span>Combustível</span>
         <select id="fuelup-fuel-type">
           <option value="gasolina">Gasolina</option>
+          <option value="gasolina-aditivada">Gasolina Aditivada</option>
+          <option value="gasolina-premium">Gasolina Premium</option>
           <option value="etanol">Etanol</option>
-          <option value="diesel">Diesel</option>
-          <option value="gnv">GNV</option>
-          <option value="flex">Flex (mistura)</option>
+          <option value="diesel-s10">Diesel S10</option>
         </select>
       </label>
       <label class="checkbox-field">
@@ -333,6 +415,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 
 <script src="firebase-config.js"></script>
 <script src="app.js"></script>
