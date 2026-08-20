@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Tanque Cheio — Controle de Abastecimento</title>
+<meta name="description" content="Controle de abastecimentos, consumo e gastos da moto e do carro." />
+<meta name="theme-color" content="#1A1B1E" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/favicon-32.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Tanque Cheio" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============ TELA DE AUTENTICAÇÃO ============ -->
+<section id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <div class="brand">
+      <div class="brand-gauge" aria-hidden="true">
+        <svg viewBox="0 0 100 100">
+          <circle class="gauge-track" cx="50" cy="50" r="38" />
+          <path class="gauge-arc" d="M 21.6 71.6 A 38 38 0 1 1 78.4 71.6" />
+          <line class="gauge-needle" x1="50" y1="50" x2="72" y2="34" />
+          <circle class="gauge-hub" cx="50" cy="50" r="4" />
+        </svg>
+      </div>
+      <h1>Tanque Cheio</h1>
+      <p class="brand-tagline">Consumo, custo e histórico da sua moto e do seu carro, num só lugar.</p>
+    </div>
+
+    <form id="auth-form" class="auth-form">
+      <label class="field">
+        <span>E-mail</span>
+        <input type="email" id="auth-email" autocomplete="email" required />
+      </label>
+      <label class="field">
+        <span>Senha</span>
+        <input type="password" id="auth-password" autocomplete="current-password" required minlength="6" />
+      </label>
+      <p id="auth-error" class="auth-error" hidden></p>
+      <button type="submit" id="auth-submit" class="btn btn-primary btn-block">Entrar</button>
+      <button type="button" id="auth-toggle" class="btn-link">Não tem conta? Criar cadastro</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<div id="app" class="app" hidden>
+
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg class="topbar-icon" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="gauge-track" cx="50" cy="50" r="38" />
+        <path class="gauge-arc" d="M 21.6 71.6 A 38 38 0 1 1 78.4 71.6" />
+      </svg>
+      <span>Tanque Cheio</span>
+    </div>
+    <button id="logout-btn" class="btn-icon" title="Sair" aria-label="Sair">⏻</button>
+  </header>
+
+  <main class="view-wrap">
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <section id="view-dashboard" class="view">
+      <div class="view-head">
+        <h2>Painel</h2>
+        <select id="dashboard-vehicle-filter" class="select"></select>
+      </div>
+
+      <div class="hero-gauge-card">
+        <div class="hero-gauge" id="hero-gauge">
+          <svg viewBox="0 0 200 200">
+            <circle class="gauge-track-lg" cx="100" cy="100" r="78" />
+            <path class="gauge-arc-lg" id="hero-gauge-arc" d="" />
+            <line class="gauge-needle-lg" id="hero-gauge-needle" x1="100" y1="100" x2="100" y2="30" />
+            <circle class="gauge-hub-lg" cx="100" cy="100" r="7" />
+          </svg>
+          <div class="hero-gauge-readout">
+            <span id="hero-gauge-value">—</span>
+            <small>km/l médio</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <span class="stat-label">Gasto no mês</span>
+          <span class="stat-value" id="stat-month-cost">R$ —</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Preço médio / litro</span>
+          <span class="stat-value" id="stat-avg-price">R$ —</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Km rodados (mês)</span>
+          <span class="stat-value" id="stat-month-km">— km</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Litros no mês</span>
+          <span class="stat-value" id="stat-month-liters">— L</span>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Consumo ao longo do tempo (km/l)</h3>
+        <canvas id="chart-consumption"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Preço do combustível (R$/l)</h3>
+        <canvas id="chart-price"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Gasto por mês (R$)</h3>
+        <canvas id="chart-cost"></canvas>
+      </div>
+
+      <p id="dashboard-empty" class="empty-state" hidden>
+        Cadastre um veículo e o primeiro abastecimento para ver seus gráficos aqui.
+      </p>
+    </section>
+
+    <!-- ---------- ABASTECIMENTOS ---------- -->
+    <section id="view-fuelups" class="view" hidden>
+      <div class="view-head">
+        <h2>Abastecimentos</h2>
+        <button class="btn btn-primary btn-sm" id="add-fuelup-btn">+ Novo</button>
+      </div>
+      <div id="fuelups-list" class="entry-list"></div>
+      <p id="fuelups-empty" class="empty-state" hidden>Nenhum abastecimento cadastrado ainda.</p>
+    </section>
+
+    <!-- ---------- VEÍCULOS ---------- -->
+    <section id="view-vehicles" class="view" hidden>
+      <div class="view-head">
+        <h2>Veículos</h2>
+        <button class="btn btn-primary btn-sm" id="add-vehicle-btn">+ Novo</button>
+      </div>
+      <div id="vehicles-list" class="vehicle-list"></div>
+
+      <div class="view-subhead" id="archived-head" hidden>
+        <h3>Arquivados</h3>
+      </div>
+      <div id="vehicles-archived-list" class="vehicle-list"></div>
+    </section>
+
+    <!-- ---------- AJUSTES ---------- -->
+    <section id="view-settings" class="view" hidden>
+      <div class="view-head">
+        <h2>Ajustes</h2>
+      </div>
+      <div class="settings-card">
+        <p class="settings-row"><span>Conta</span><span id="settings-email">—</span></p>
+        <button class="btn btn-secondary btn-block" id="export-btn">Exportar dados (JSON)</button>
+        <button class="btn btn-danger btn-block" id="settings-logout-btn">Sair da conta</button>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-view="dashboard">
+      <span class="tab-icon">◍</span><span>Painel</span>
+    </button>
+    <button class="tab-btn" data-view="fuelups">
+      <span class="tab-icon">⛽</span><span>Abastecer</span>
+    </button>
+    <button class="tab-btn" data-view="vehicles">
+      <span class="tab-icon">🏍</span><span>Veículos</span>
+    </button>
+    <button class="tab-btn" data-view="settings">
+      <span class="tab-icon">⚙</span><span>Ajustes</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ============ MODAL: ABASTECIMENTO ============ -->
+<div id="fuelup-modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="fuelup-modal-title">Novo abastecimento</h3>
+      <button class="btn-icon" id="fuelup-modal-close" aria-label="Fechar">✕</button>
+    </div>
+    <form id="fuelup-form" class="form">
+      <input type="hidden" id="fuelup-id" />
+      <label class="field">
+        <span>Veículo</span>
+        <select id="fuelup-vehicle" required></select>
+      </label>
+      <label class="field">
+        <span>Data</span>
+        <input type="date" id="fuelup-date" required />
+      </label>
+      <label class="field">
+        <span>Odômetro (km)</span>
+        <input type="number" id="fuelup-odometer" min="0" step="1" inputmode="numeric" required />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Litros</span>
+          <input type="number" id="fuelup-liters" min="0.01" step="0.01" inputmode="decimal" required />
+        </label>
+        <label class="field">
+          <span>Valor total (R$)</span>
+          <input type="number" id="fuelup-total" min="0" step="0.01" inputmode="decimal" required />
+        </label>
+      </div>
+      <label class="field">
+        <span>R$ por litro</span>
+        <input type="text" id="fuelup-price-per-liter" readonly />
+      </label>
+      <label class="field">
+        <span>Combustível</span>
+        <select id="fuelup-fuel-type">
+          <option value="gasolina">Gasolina</option>
+          <option value="etanol">Etanol</option>
+          <option value="diesel">Diesel</option>
+          <option value="gnv">GNV</option>
+          <option value="flex">Flex (mistura)</option>
+        </select>
+      </label>
+      <label class="checkbox-field">
+        <input type="checkbox" id="fuelup-full-tank" checked />
+        <span>Tanque cheio (necessário para calcular consumo)</span>
+      </label>
+
+      <div class="form-divider">
+        <span>Painel do veículo (opcional, para comparar)</span>
+      </div>
+      <label class="field">
+        <span>Tempo de motor ligado neste tanque (h)</span>
+        <input type="number" id="fuelup-engine-hours" min="0" step="0.1" inputmode="decimal" placeholder="Ex.: 5.5" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Vel. média do painel (km/h)</span>
+          <input type="number" id="fuelup-vehicle-avg-speed" min="0" step="0.1" inputmode="decimal" placeholder="Ex.: 42" />
+        </label>
+        <label class="field">
+          <span>Consumo do painel (km/l)</span>
+          <input type="number" id="fuelup-vehicle-kml" min="0" step="0.1" inputmode="decimal" placeholder="Ex.: 21.8" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Posto / observação (opcional)</span>
+        <input type="text" id="fuelup-notes" maxlength="120" />
+      </label>
+      <p id="fuelup-error" class="auth-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="fuelup-delete-btn" hidden>Excluir</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: VEÍCULO ============ -->
+<div id="vehicle-modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="vehicle-modal-title">Novo veículo</h3>
+      <button class="btn-icon" id="vehicle-modal-close" aria-label="Fechar">✕</button>
+    </div>
+    <form id="vehicle-form" class="form">
+      <input type="hidden" id="vehicle-id" />
+      <label class="field">
+        <span>Apelido</span>
+        <input type="text" id="vehicle-name" placeholder="Ex.: CG 160, Onix Prata..." required maxlength="40" />
+      </label>
+      <label class="field">
+        <span>Tipo</span>
+        <select id="vehicle-type">
+          <option value="moto">Moto</option>
+          <option value="carro">Carro</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Placa (opcional)</span>
+        <input type="text" id="vehicle-plate" maxlength="10" />
+      </label>
+      <p id="vehicle-error" class="auth-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="vehicle-archive-btn" hidden>Arquivar</button>
+        <button type="button" class="btn btn-danger" id="vehicle-delete-btn" hidden>Excluir</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<!-- Firebase (compat SDK — sem etapa de build, igual aos outros projetos) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
