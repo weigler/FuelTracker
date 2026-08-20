@@ -1,4 +1,4 @@
-const CACHE_NAME = "tanque-cheio-v1";
+const CACHE_NAME = "tanque-cheio-v2";
 const CORE_ASSETS = [
   "./",
   "./index.html",

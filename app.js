@@ -313,7 +313,7 @@ function fuelupCardHtml(f, calc) {
     <div class="entry-card" data-fuelup-open="${f.id}">
       <div class="entry-icon">${icon}</div>
       <div class="entry-main">
-        <div class="entry-title">${escapeHtml(vName)} · ${fmtDateBR(f.date)}</div>
+        <div class="entry-title">${escapeHtml(vName)} · ${fmtDateBR(f.date)}${f.nfceKey ? '<span class="nfce-badge">NF</span>' : ""}</div>
         <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${f.fuelType}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${Number(f.engineHours).toFixed(1)}h motor` : ""}</div>
       </div>
       <div class="entry-metric">
@@ -334,6 +334,11 @@ function openFuelupModal(id) {
   }
   const f = fuelups.find((x) => x.id === id);
   $("fuelup-id").value = id || "";
+  $("fuelup-nfce-key").value = f ? f.nfceKey || "" : "";
+  $("nfce-preview").hidden = true;
+  $("nfce-preview").innerHTML = "";
+  $("nfce-paste-box").hidden = true;
+  $("nfce-paste-input").value = "";
   $("fuelup-modal-title").textContent = f ? "Editar abastecimento" : "Novo abastecimento";
   if (f) {
     $("fuelup-vehicle").value = f.vehicleId;
@@ -399,6 +404,7 @@ $("fuelup-form").addEventListener("submit", async (e) => {
     engineHours: parseOptionalNumber($("fuelup-engine-hours").value),
     vehicleAvgSpeed: parseOptionalNumber($("fuelup-vehicle-avg-speed").value),
     vehicleKmL: parseOptionalNumber($("fuelup-vehicle-kml").value),
+    nfceKey: $("fuelup-nfce-key").value.trim() || null,
     notes: $("fuelup-notes").value.trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -674,4 +680,230 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
   });
+}
+
+/* ================================================================
+   IMPORTAÇÃO DE NFC-e (QR Code do cupom fiscal)
+   ------------------------------------------------------------------
+   O QR Code da NFC-e traz sempre a chave de acesso de 44 dígitos
+   (dela dá pra extrair o CNPJ do emitente com certeza). Em muitos
+   estados (modelo "QR Code offline", Ato COTEPE 22/2019) o valor
+   total (vNF) e a data/hora de emissão (dhEmi) também vêm junto,
+   sem precisar consultar a internet — então tentamos extrair isso
+   também, mas sempre mostrando pro usuário conferir antes de aplicar,
+   já que o formato varia de estado pra estado e nem sempre é possível
+   identificar o valor com 100% de certeza. Litros e odômetro o cupom
+   não informa, então continuam manuais.
+   ================================================================ */
+
+let nfceStream = null;
+
+$("nfce-scan-btn").addEventListener("click", startNfceCamera);
+$("nfce-camera-close").addEventListener("click", stopNfceCamera);
+$("nfce-upload-btn").addEventListener("click", () => $("nfce-file-input").click());
+$("nfce-paste-btn").addEventListener("click", () => {
+  $("nfce-paste-box").hidden = !$("nfce-paste-box").hidden;
+});
+$("nfce-paste-confirm").addEventListener("click", () => {
+  const text = $("nfce-paste-input").value.trim();
+  if (!text) return;
+  const result = parseNFCeText(text);
+  if (!result.key && result.totalValue === null) {
+    toast("Não consegui reconhecer um código de NFC-e nesse texto.");
+    return;
+  }
+  renderNfcePreview(result);
+  $("nfce-paste-input").value = "";
+  $("nfce-paste-box").hidden = true;
+});
+
+$("nfce-file-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    URL.revokeObjectURL(img.src);
+    if (code && code.data) {
+      renderNfcePreview(parseNFCeText(code.data));
+    } else {
+      toast("Não encontrei um QR Code nessa imagem. Tente uma foto mais próxima e nítida.");
+    }
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+async function startNfceCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast("Este navegador não permite acesso à câmera. Use 'Enviar imagem' ou 'Colar código'.");
+    return;
+  }
+  try {
+    nfceStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+  } catch (err) {
+    toast("Não foi possível acessar a câmera. Confira as permissões do navegador.");
+    return;
+  }
+  const video = $("nfce-video");
+  video.srcObject = nfceStream;
+  $("nfce-camera-modal").hidden = false;
+  requestAnimationFrame(scanNfceFrame);
+}
+
+function stopNfceCamera() {
+  if (nfceStream) {
+    nfceStream.getTracks().forEach((t) => t.stop());
+    nfceStream = null;
+  }
+  $("nfce-camera-modal").hidden = true;
+}
+
+function scanNfceFrame() {
+  if (!nfceStream) return;
+  const video = $("nfce-video");
+  const canvas = $("nfce-canvas");
+  if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+    if (code && code.data) {
+      stopNfceCamera();
+      renderNfcePreview(parseNFCeText(code.data));
+      return;
+    }
+  }
+  requestAnimationFrame(scanNfceFrame);
+}
+
+// Extrai o que der da URL/texto do QR Code da NFC-e.
+function parseNFCeText(rawText) {
+  const text = String(rawText || "").trim();
+  const result = { key: null, cnpj: null, totalValue: null, date: null, raw: text };
+
+  const keyMatch = text.match(/\d{44}/);
+  if (keyMatch) {
+    result.key = keyMatch[0];
+    result.cnpj = formatCNPJ(result.key.substring(6, 20));
+  }
+
+  try {
+    const url = new URL(text);
+    const params = url.searchParams;
+
+    // Alguns portais estaduais usam parâmetros nomeados diretamente na URL
+    const namedTotal = params.get("vNF");
+    if (namedTotal && /^\d+(\.\d+)?$/.test(namedTotal)) result.totalValue = parseFloat(namedTotal);
+    const namedDate = params.get("dhEmi");
+    if (namedDate) {
+      const d = parseNFCeDateToken(namedDate);
+      if (d) result.date = d;
+    }
+    if (!result.key) {
+      const chNFe = params.get("chNFe");
+      if (chNFe && /^\d{44}$/.test(chNFe)) {
+        result.key = chNFe;
+        result.cnpj = formatCNPJ(chNFe.substring(6, 20));
+      }
+    }
+
+    // Modelo "QR Code offline" (Ato COTEPE 22/2019): parâmetro p="chave|versao|tpAmb|dhEmi|vNF|..."
+    const p = params.get("p");
+    if (p) {
+      const parts = p.split("|");
+      if (!result.key && /^\d{44}$/.test(parts[0])) {
+        result.key = parts[0];
+        result.cnpj = formatCNPJ(parts[0].substring(6, 20));
+      }
+      parts.forEach((part) => {
+        if (result.totalValue === null && /^\d{1,7}\.\d{2}$/.test(part)) {
+          result.totalValue = parseFloat(part);
+        }
+        if (result.date === null && /^\d{8,14}$/.test(part)) {
+          const d = parseNFCeDateToken(part);
+          if (d) result.date = d;
+        }
+      });
+    }
+  } catch (e) {
+    // Não é uma URL válida — pode ser um texto colado solto; procura um valor monetário isolado
+    const valMatch = text.match(/\b\d{1,7}[.,]\d{2}\b/);
+    if (valMatch && result.totalValue === null) {
+      result.totalValue = parseFloat(valMatch[0].replace(",", "."));
+    }
+  }
+
+  return result;
+}
+
+function parseNFCeDateToken(token) {
+  const digits = String(token).replace(/\D/g, "");
+  let y, m, d;
+  if (digits.length >= 12) {
+    y = digits.slice(0, 4); m = digits.slice(4, 6); d = digits.slice(6, 8);
+  } else if (digits.length >= 10) {
+    y = "20" + digits.slice(0, 2); m = digits.slice(2, 4); d = digits.slice(4, 6);
+  } else if (digits.length === 8) {
+    y = digits.slice(0, 4); m = digits.slice(4, 6); d = digits.slice(6, 8);
+  } else {
+    return null;
+  }
+  const mi = parseInt(m, 10), di = parseInt(d, 10), yi = parseInt(y, 10);
+  if (mi < 1 || mi > 12 || di < 1 || di > 31 || yi < 2015 || yi > 2100) return null;
+  return `${y}-${m}-${d}`;
+}
+
+function formatCNPJ(digits) {
+  if (!digits || digits.length !== 14) return null;
+  return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+}
+
+function renderNfcePreview(result) {
+  const el = $("nfce-preview");
+  el.hidden = false;
+  const keySpaced = result.key ? result.key.replace(/(\d{4})(?=\d)/g, "$1 ") : null;
+  el.innerHTML = `
+    <div class="nfce-preview-row"><span>Chave de acesso</span><strong>${keySpaced || "não identificada"}</strong></div>
+    <div class="nfce-preview-row"><span>Emitente (CNPJ)</span><strong>${result.cnpj || "—"}</strong></div>
+    <div class="nfce-preview-row"><span>Valor total detectado</span><strong>${result.totalValue !== null ? fmtMoney(result.totalValue) : "não identificado"}</strong></div>
+    <div class="nfce-preview-row"><span>Data detectada</span><strong>${result.date ? fmtDateBR(result.date) : "não identificada"}</strong></div>
+    <p class="nfce-preview-note">O formato do QR varia por estado — confira valor e data com o cupom antes de aplicar. Litros e km continuam manuais.</p>
+    <div class="nfce-preview-actions">
+      <button type="button" class="btn btn-secondary btn-sm" id="nfce-discard-btn">Descartar</button>
+      <button type="button" class="btn btn-primary btn-sm" id="nfce-apply-btn">Aplicar ao formulário</button>
+    </div>
+  `;
+  $("nfce-discard-btn").addEventListener("click", () => {
+    el.hidden = true;
+    el.innerHTML = "";
+  });
+  $("nfce-apply-btn").addEventListener("click", () => applyNfceResult(result));
+}
+
+function applyNfceResult(result) {
+  if (result.totalValue !== null) {
+    $("fuelup-total").value = result.totalValue.toFixed(2);
+    updatePricePerLiterPreview();
+  }
+  if (result.date) $("fuelup-date").value = result.date;
+  if (result.key) {
+    $("fuelup-nfce-key").value = result.key;
+    const notesEl = $("fuelup-notes");
+    const tag = "NFC-e " + result.key.slice(-8);
+    if (!notesEl.value.includes(tag)) {
+      notesEl.value = notesEl.value ? notesEl.value + " · " + tag : tag;
+    }
+  }
+  $("nfce-preview").hidden = true;
+  $("nfce-preview").innerHTML = "";
+  toast("Dados da NFC-e aplicados — confira antes de salvar.");
 }

@@ -193,6 +193,22 @@
     </div>
     <form id="fuelup-form" class="form">
       <input type="hidden" id="fuelup-id" />
+      <input type="hidden" id="fuelup-nfce-key" />
+
+      <div class="nfce-import">
+        <div class="nfce-import-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="nfce-scan-btn">📷 Escanear QR</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="nfce-upload-btn">🖼 Enviar imagem</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="nfce-paste-btn">🔗 Colar código</button>
+        </div>
+        <input type="file" id="nfce-file-input" accept="image/*" hidden />
+        <div id="nfce-paste-box" class="nfce-paste-box" hidden>
+          <input type="text" id="nfce-paste-input" placeholder="Cole a URL ou o texto do QR da NFC-e" />
+          <button type="button" class="btn btn-primary btn-sm" id="nfce-paste-confirm">Ler</button>
+        </div>
+        <div id="nfce-preview" class="nfce-preview" hidden></div>
+      </div>
+
       <label class="field">
         <span>Veículo</span>
         <select id="fuelup-vehicle" required></select>
@@ -301,7 +317,18 @@
 
 <div id="toast" class="toast" hidden></div>
 
+<div id="nfce-camera-modal" class="camera-modal" hidden>
+  <video id="nfce-video" playsinline autoplay muted></video>
+  <canvas id="nfce-canvas" hidden></canvas>
+  <div class="camera-overlay">
+    <div class="camera-frame"></div>
+    <p>Aponte para o QR Code da NFC-e (no rodapé do cupom fiscal)</p>
+  </div>
+  <button type="button" class="btn btn-secondary camera-close" id="nfce-camera-close">Cancelar</button>
+</div>
+
 <!-- Firebase (compat SDK — sem etapa de build, igual aos outros projetos) -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>

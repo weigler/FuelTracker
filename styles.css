@@ -82,6 +82,76 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .checkbox-field { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-dim); }
 .checkbox-field input { width: 18px; height: 18px; accent-color: var(--amber); }
 
+/* ---- Importação de NFC-e ---- */
+.nfce-import {
+  background: var(--panel);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.nfce-import-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.nfce-import-actions .btn { flex: 1; min-width: 100px; }
+.nfce-paste-box { display: flex; gap: 8px; }
+.nfce-paste-box input {
+  flex: 1;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px;
+}
+.nfce-preview {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.nfce-preview-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.nfce-preview-row span { color: var(--text-faint); }
+.nfce-preview-row strong { font-family: var(--font-mono); font-weight: 500; text-align: right; }
+.nfce-preview-note { font-size: 11px; color: var(--text-faint); margin: 4px 0 0; line-height: 1.4; }
+.nfce-preview-actions { display: flex; gap: 8px; margin-top: 4px; }
+.nfce-preview-actions .btn { flex: 1; }
+
+.nfce-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(232,162,61,0.15);
+  color: var(--amber);
+  margin-left: 6px;
+}
+
+/* ---- Overlay de câmera ---- */
+.camera-modal {
+  position: fixed; inset: 0; z-index: 80;
+  background: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.camera-modal video { width: 100%; height: 100%; object-fit: cover; }
+.camera-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; pointer-events: none;
+}
+.camera-frame {
+  width: 62vw; max-width: 280px; aspect-ratio: 1;
+  border: 3px solid var(--amber);
+  border-radius: 18px;
+  box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);
+}
+.camera-overlay p {
+  color: #fff; font-size: 13px; text-align: center; max-width: 260px;
+  background: rgba(0,0,0,0.5); padding: 8px 14px; border-radius: 999px;
+}
+.camera-close {
+  position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%);
+  z-index: 81;
+}
+
 .form-divider {
   display: flex; align-items: center; gap: 10px;
   margin: 4px 0 -2px;
