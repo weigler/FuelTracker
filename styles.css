@@ -112,6 +112,8 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .field input:focus, .field select:focus { border-color: var(--amber); }
 .field-row { display: flex; gap: 10px; }
 .field-row .field { flex: 1; }
+.field-row > input,
+.field-row > select { flex: 1; min-width: 0; }
 .field-hint { font-size: 12px; color: var(--text-faint); line-height: 1.4; margin: -6px 0 0; }
 .field-warning { color: var(--red); }
 
@@ -296,16 +298,29 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .hero-gauge-readout small { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
 
 /* ================= STATS ================= */
-.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; }
 .stat-card {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 14px;
-  display: flex; flex-direction: column; gap: 6px;
+  min-height: 66px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
 }
 .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
-.stat-value { font-family: var(--font-mono); font-size: 20px; font-weight: 600; color: var(--text); }
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ================= CHARTS ================= */
 .chart-card {
