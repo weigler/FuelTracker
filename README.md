@@ -17,7 +17,7 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 - **Ranking de postos**: agrupa os abastecimentos por posto (nome/CNPJ) e mostra o preço médio pago em cada um, do mais barato ao mais caro
 - **Comparação entre veículos**: custo total (combustível + despesas + manutenção) por km rodado, lado a lado, quando "Todos os veículos" está selecionado
 - **Manutenção**: registro de manutenções por veículo (óleo, filtros, pneus, freios, revisão, etc.) com intervalo por km e/ou por meses; o Painel de Manutenção avisa quando alguma está vencendo ou vencida, comparando com o odômetro mais recente
-- **Despesas**: IPVA, seguro, licenciamento, estacionamento, multa, lavagem, pedágio e outras, por veículo
+- **Despesas**: IPVA, seguro, licenciamento, peças, estacionamento, multa, lavagem, pedágio e outras, por veículo
 - **Gráficos**: consumo (km/l), preço do combustível e gasto mensal ao longo do tempo
 - **Tema claro/escuro**, em Ajustes → Aparência (preferência salva no aparelho)
 - **Backup e restauração no Firestore**, em Ajustes → Backup: "Criar backup agora" grava um snapshot dos seus veículos e abastecimentos numa coleção própria (`users/{uid}/backups`) — não é um arquivo, fica dentro da sua conta. A lista de backups mostra data/hora e quantidade de registros, com "Restaurar" (atualiza pelo mesmo ID, sem apagar nada) e excluir
@@ -121,6 +121,8 @@ O mesmo raciocínio vale para a velocidade média calculada, usando as horas de 
 O QR Code impresso no cupom da NFC-e sempre traz a **chave de acesso de 44 dígitos**, da qual o app já extrai o **CNPJ do emitente** com certeza (são os dígitos 7 a 20 da chave). Em vários estados (modelo "QR Code offline", adotado desde 2019/2021), o próprio QR também carrega o **valor total** e a **data/hora de emissão** sem precisar consultar a internet, e o app tenta reconhecer esses campos.
 
 **O que a leitura NÃO consegue trazer:** o detalhamento de itens da nota (litros abastecidos, preço por litro) não vem no QR Code — isso exigiria consultar o portal da Sefaz de cada estado, que não permite acesso direto do navegador (bloqueio de CORS) e frequentemente pede captcha. Por isso litros e odômetro continuam sendo preenchidos por você.
+
+**Também dá pra colar só a chave de acesso (os 44 números do cupom), sem precisar escanear o QR Code de novo.** O CNPJ do emitente é extraído da própria chave (posições 7 a 20), então sai certo sempre. Só que sem a URL do QR, o valor total e a data de emissão não vêm — o app já mostra "não identificado" nesses campos pra você completar à mão.
 
 **Por que sempre aparece uma prévia para conferir:** o formato exato do QR varia de estado para estado e entre versões, então o valor detectado pode ocasionalmente vir errado ou não ser identificado. A prévia mostra o que foi lido antes de aplicar ao formulário — nunca é salvo direto, encaixando com o seu hábito de sempre conferir os valores.
 

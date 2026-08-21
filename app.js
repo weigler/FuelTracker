@@ -820,6 +820,7 @@ const EXPENSE_CATEGORY_LABELS = {
   ipva: "IPVA",
   seguro: "Seguro",
   licenciamento: "Licenciamento",
+  pecas: "Peças",
   estacionamento: "Estacionamento",
   multa: "Multa",
   lavagem: "Lavagem",
@@ -1001,7 +1002,7 @@ function openFuelupModal(id) {
     $("fuelup-vehicle-avg-speed").value = f.vehicleAvgSpeed ?? "";
     $("fuelup-vehicle-kml").value = f.vehicleKmL ?? "";
     $("fuelup-station-name").value = f.stationName || "";
-    $("fuelup-station-cnpj").value = f.stationCnpj || "";
+    $("fuelup-station-cnpj").value = maskCnpjProgressive((f.stationCnpj || "").replace(/\D/g, ""));
     $("fuelup-notes").value = f.notes || "";
   } else {
     updateFuelupFuelTypeOptions();
@@ -1854,6 +1855,23 @@ function formatCNPJ(digits) {
   if (!digits || digits.length !== 14) return null;
   return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
 }
+
+// Formata progressivamente enquanto digita, aceitando só números (mesmo
+// que a pessoa cole um CNPJ já pontuado, ele é normalizado).
+function maskCnpjProgressive(digits) {
+  const d = digits.slice(0, 14);
+  let out = d.slice(0, 2);
+  if (d.length > 2) out += "." + d.slice(2, 5);
+  if (d.length > 5) out += "." + d.slice(5, 8);
+  if (d.length > 8) out += "/" + d.slice(8, 12);
+  if (d.length > 12) out += "-" + d.slice(12, 14);
+  return out;
+}
+
+$("fuelup-station-cnpj").addEventListener("input", (e) => {
+  const digits = e.target.value.replace(/\D/g, "");
+  e.target.value = maskCnpjProgressive(digits);
+});
 
 function renderNfcePreview(result) {
   const el = $("nfce-preview");

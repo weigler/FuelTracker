@@ -365,7 +365,7 @@
         </div>
         <input type="file" id="nfce-file-input" accept="image/*" hidden />
         <div id="nfce-paste-box" class="nfce-paste-box" hidden>
-          <input type="text" id="nfce-paste-input" placeholder="Cole a URL ou o texto do QR da NFC-e" />
+          <input type="text" id="nfce-paste-input" inputmode="numeric" placeholder="Chave de acesso (44 números) ou URL do QR Code" />
           <button type="button" class="btn btn-primary btn-sm" id="nfce-paste-confirm">Ler</button>
         </div>
         <div id="nfce-preview" class="nfce-preview" hidden></div>
@@ -448,7 +448,7 @@
         </label>
         <label class="field">
           <span>CNPJ do posto (opcional)</span>
-          <input type="text" id="fuelup-station-cnpj" maxlength="18" placeholder="Preenchido pela NFC-e" />
+          <input type="text" id="fuelup-station-cnpj" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" />
         </label>
       </div>
       <label class="field">
@@ -602,6 +602,7 @@
           <option value="ipva">IPVA</option>
           <option value="seguro">Seguro</option>
           <option value="licenciamento">Licenciamento</option>
+          <option value="pecas">Peças</option>
           <option value="estacionamento">Estacionamento</option>
           <option value="multa">Multa</option>
           <option value="lavagem">Lavagem</option>
