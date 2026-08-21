@@ -83,3 +83,4 @@ O QR Code impresso no cupom da NFC-e sempre traz a **chave de acesso de 44 dígi
 - Firebase via SDK compat (script tags), Chart.js, jsQR e jsPDF (+ autoTable) via CDN
 - `service-worker.js` cacheia apenas os arquivos da própria aplicação; chamadas ao Firestore nunca são cacheadas
 - O tema (claro/escuro) é salvo no `localStorage` do aparelho — é uma preferência de interface, não fica no Firestore, então pode variar entre dispositivos
+- **Correção importante:** classes como `.modal`, `.view` e `.auth-screen` definem `display: flex` explicitamente; sem uma regra `[hidden] { display: none !important; }`, essas classes venciam a regra padrão do navegador para o atributo `hidden`, fazendo telas "escondidas" (login, modais, abas) aparecerem por cima de tudo. Se você criar novos elementos com `display` explícito controlados por `hidden`, essa regra global já cobre — não precisa repetir por componente.

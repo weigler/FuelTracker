@@ -45,6 +45,15 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
+
+/* Qualquer elemento com o atributo "hidden" deve ficar escondido, mesmo que
+   sua classe defina display:flex/grid/block — sem isso, uma regra de classe
+   normal do nosso próprio CSS vence a regra padrão do navegador para
+   [hidden], porque CSS de autor sempre tem prioridade sobre CSS de user-agent.
+   Isso já causou telas (login, modais, abas) aparecerem por cima umas das
+   outras mesmo estando "escondidas". */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
