@@ -8,16 +8,19 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 let currentUser = null;
-let vehicles = [];      // todos os veículos do usuário
-let fuelups = [];       // todos os abastecimentos do usuário
+let vehicles = [];      // todos os veículos do grupo
+let fuelups = [];       // todos os abastecimentos do grupo
 let backups = [];       // snapshots de backup guardados no Firestore
 let maintenances = [];  // registros de manutenção
 let expenses = [];      // despesas (IPVA, seguro, etc.)
+let currentHouseholdId = null;
+let currentHousehold = null;
 let unsubVehicles = null;
 let unsubFuelups = null;
 let unsubBackups = null;
 let unsubMaintenances = null;
 let unsubExpenses = null;
+let unsubHousehold = null;
 let dashboardFilter = "all";
 let charts = { consumption: null, price: null, cost: null };
 
@@ -151,6 +154,99 @@ $("auth-form").addEventListener("submit", async (e) => {
   }
 });
 
+auth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  if (user) {
+    $("auth-screen").hidden = true;
+    $("app").hidden = false;
+    $("settings-email").textContent = user.email || "—";
+    try {
+      const household = await ensureHousehold(user.uid, user.email || "");
+      currentHouseholdId = household.id;
+      attachListeners();
+    } catch (err) {
+      toast("Erro ao carregar seus dados: " + err.message);
+    }
+  } else {
+    $("app").hidden = true;
+    $("auth-screen").hidden = false;
+    if (unsubVehicles) unsubVehicles();
+    if (unsubFuelups) unsubFuelups();
+    if (unsubBackups) unsubBackups();
+    if (unsubMaintenances) unsubMaintenances();
+    if (unsubExpenses) unsubExpenses();
+    if (unsubHousehold) unsubHousehold();
+    vehicles = [];
+    fuelups = [];
+    backups = [];
+    maintenances = [];
+    expenses = [];
+    currentHouseholdId = null;
+    currentHousehold = null;
+  }
+});
+
+/* ---------------- Grupo (household) ---------------- */
+// Resolve o grupo do usuário: se ele já pertence a um, usa esse; senão,
+// cria um novo grupo com ele como único membro e migra, uma única vez,
+// os dados antigos de users/{uid}/... (de antes de existir grupo) pra lá.
+async function ensureHousehold(uid, email) {
+  const existing = await db.collection("households").where("members", "array-contains", uid).limit(1).get();
+  if (!existing.empty) {
+    const doc = existing.docs[0];
+    return { id: doc.id, ...doc.data() };
+  }
+
+  const [legacyVehicles, legacyFuelups, legacyMaintenances, legacyExpenses, legacyBackups] = await Promise.all([
+    db.collection("users").doc(uid).collection("vehicles").get().catch(() => null),
+    db.collection("users").doc(uid).collection("fuelups").get().catch(() => null),
+    db.collection("users").doc(uid).collection("maintenances").get().catch(() => null),
+    db.collection("users").doc(uid).collection("expenses").get().catch(() => null),
+    db.collection("users").doc(uid).collection("backups").get().catch(() => null),
+  ]);
+
+  const inviteCode = generateInviteCode();
+  const householdRef = db.collection("households").doc();
+  await householdRef.set({
+    members: [uid],
+    memberNames: { [uid]: email },
+    inviteCode,
+    createdBy: uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  await db.collection("householdInvites").doc(inviteCode).set({ householdId: householdRef.id });
+
+  const migrations = [];
+  const copyInto = (snap, subcol) => {
+    if (!snap) return;
+    snap.docs.forEach((d) => migrations.push(householdRef.collection(subcol).doc(d.id).set(d.data())));
+  };
+  copyInto(legacyVehicles, "vehicles");
+  copyInto(legacyFuelups, "fuelups");
+  copyInto(legacyMaintenances, "maintenances");
+  copyInto(legacyExpenses, "expenses");
+  copyInto(legacyBackups, "backups");
+  if (migrations.length > 0) {
+    await Promise.all(migrations);
+    toast("Seus dados foram migrados para o novo formato de grupo.");
+  }
+
+  const created = await householdRef.get();
+  return { id: householdRef.id, ...created.data() };
+}
+
+function generateInviteCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem caracteres ambíguos (0/O, 1/I)
+  let code = "";
+  for (let i = 0; i < 7; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code.slice(0, 3) + "-" + code.slice(3);
+}
+
+function getMemberDisplayName(uid) {
+  if (!currentHousehold || !currentHousehold.memberNames) return uid;
+  return currentHousehold.memberNames[uid] || uid;
+}
+
 function translateAuthError(code) {
   const map = {
     "auth/invalid-email": "E-mail inválido.",
@@ -169,33 +265,15 @@ function doLogout() {
 $("logout-btn").addEventListener("click", doLogout);
 $("settings-logout-btn").addEventListener("click", doLogout);
 
-auth.onAuthStateChanged((user) => {
-  currentUser = user;
-  if (user) {
-    $("auth-screen").hidden = true;
-    $("app").hidden = false;
-    $("settings-email").textContent = user.email || "—";
-    attachListeners(user.uid);
-  } else {
-    $("app").hidden = true;
-    $("auth-screen").hidden = false;
-    if (unsubVehicles) unsubVehicles();
-    if (unsubFuelups) unsubFuelups();
-    if (unsubBackups) unsubBackups();
-    if (unsubMaintenances) unsubMaintenances();
-    if (unsubExpenses) unsubExpenses();
-    vehicles = [];
-    fuelups = [];
-    backups = [];
-    maintenances = [];
-    expenses = [];
-  }
-});
-
 /* ---------------- Firestore listeners ---------------- */
-function attachListeners(uid) {
-  const vehiclesRef = db.collection("users").doc(uid).collection("vehicles");
-  const fuelupsRef = db.collection("users").doc(uid).collection("fuelups");
+function attachListeners() {
+  const vehiclesRef = vehiclesCol();
+  const fuelupsRef = fuelupsCol();
+
+  unsubHousehold = db.collection("households").doc(currentHouseholdId).onSnapshot((snap) => {
+    currentHousehold = { id: snap.id, ...snap.data() };
+    renderHouseholdSettings();
+  }, (err) => toast("Erro ao carregar o grupo: " + err.message));
 
   unsubVehicles = vehiclesRef.onSnapshot((snap) => {
     vehicles = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -230,22 +308,109 @@ function attachListeners(uid) {
   }, (err) => toast("Erro ao carregar despesas: " + err.message));
 }
 
+function householdRef() {
+  return db.collection("households").doc(currentHouseholdId);
+}
 function backupsCol() {
-  return db.collection("users").doc(currentUser.uid).collection("backups");
+  return householdRef().collection("backups");
 }
 function maintenancesCol() {
-  return db.collection("users").doc(currentUser.uid).collection("maintenances");
+  return householdRef().collection("maintenances");
 }
 function expensesCol() {
-  return db.collection("users").doc(currentUser.uid).collection("expenses");
+  return householdRef().collection("expenses");
 }
-
 function vehiclesCol() {
-  return db.collection("users").doc(currentUser.uid).collection("vehicles");
+  return householdRef().collection("vehicles");
 }
 function fuelupsCol() {
-  return db.collection("users").doc(currentUser.uid).collection("fuelups");
+  return householdRef().collection("fuelups");
 }
+
+/* ---------------- Família (grupo) ---------------- */
+function renderHouseholdSettings() {
+  if (!currentHousehold) return;
+  const members = currentHousehold.members || [];
+  $("family-members-list").innerHTML = members.map((uid) => `
+    <div class="backup-item">
+      <div>
+        <div class="backup-date">${escapeHtml(getMemberDisplayName(uid))}${uid === currentUser.uid ? " (você)" : ""}</div>
+      </div>
+    </div>`).join("");
+  $("invite-code-display").textContent = currentHousehold.inviteCode || "———";
+}
+
+$("copy-invite-code-btn").addEventListener("click", async () => {
+  if (!currentHousehold || !currentHousehold.inviteCode) return;
+  try {
+    await navigator.clipboard.writeText(currentHousehold.inviteCode);
+    toast("Código copiado.");
+  } catch (err) {
+    toast("Não consegui copiar automaticamente — código: " + currentHousehold.inviteCode);
+  }
+});
+
+$("regenerate-invite-btn").addEventListener("click", async () => {
+  if (!currentHousehold) return;
+  if (!confirm("Gerar um novo código invalida o código atual — quem tinha o código antigo não vai mais conseguir entrar com ele. Continuar?")) return;
+  try {
+    const oldCode = currentHousehold.inviteCode;
+    const newCode = generateInviteCode();
+    await db.collection("householdInvites").doc(newCode).set({ householdId: currentHouseholdId });
+    await householdRef().update({ inviteCode: newCode });
+    if (oldCode) db.collection("householdInvites").doc(oldCode).delete().catch(() => {});
+    toast("Novo código gerado.");
+  } catch (err) {
+    toast("Erro ao gerar novo código: " + err.message);
+  }
+});
+
+$("join-household-btn").addEventListener("click", async () => {
+  const statusEl = $("join-status");
+  const codeInput = $("join-code-input");
+  const code = codeInput.value.trim().toUpperCase();
+  statusEl.hidden = false;
+  if (!code) {
+    statusEl.textContent = "Digite um código.";
+    return;
+  }
+  statusEl.textContent = "Procurando grupo...";
+  try {
+    const inviteDoc = await db.collection("householdInvites").doc(code).get();
+    if (!inviteDoc.exists) {
+      statusEl.textContent = "Código não encontrado. Confira se digitou certo.";
+      return;
+    }
+    const targetHouseholdId = inviteDoc.data().householdId;
+    if (targetHouseholdId === currentHouseholdId) {
+      statusEl.textContent = "Você já está nesse grupo.";
+      return;
+    }
+    if (!confirm("Entrar nesse grupo? Seus dados atuais continuam guardados no grupo em que você está agora, mas o app vai passar a mostrar os dados do novo grupo.")) {
+      statusEl.hidden = true;
+      return;
+    }
+    await db.collection("households").doc(targetHouseholdId).update({
+      members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid),
+      [`memberNames.${currentUser.uid}`]: currentUser.email || "",
+    });
+
+    if (unsubVehicles) unsubVehicles();
+    if (unsubFuelups) unsubFuelups();
+    if (unsubBackups) unsubBackups();
+    if (unsubMaintenances) unsubMaintenances();
+    if (unsubExpenses) unsubExpenses();
+    if (unsubHousehold) unsubHousehold();
+
+    currentHouseholdId = targetHouseholdId;
+    attachListeners();
+    codeInput.value = "";
+    statusEl.hidden = true;
+    toast("Você entrou no grupo.");
+  } catch (err) {
+    statusEl.textContent = "Erro ao entrar no grupo: " + err.message;
+  }
+});
 
 /* ---------------- Navegação por abas ---------------- */
 document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -420,6 +585,7 @@ $("vehicle-form").addEventListener("submit", async (e) => {
       await vehiclesCol().doc(id).update(data);
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      data.createdBy = currentUser.uid;
       await vehiclesCol().add(data);
     }
     $("vehicle-modal").hidden = true;
@@ -488,6 +654,11 @@ function renderMaintenances() {
   });
 }
 
+function createdByLabel(createdByUid) {
+  if (!createdByUid || !currentHousehold || !currentHousehold.members || currentHousehold.members.length <= 1) return "";
+  return " · por " + escapeHtml(getMemberDisplayName(createdByUid));
+}
+
 function maintenanceCardHtml(m) {
   const v = vehicles.find((x) => x.id === m.vehicleId);
   return `
@@ -495,7 +666,7 @@ function maintenanceCardHtml(m) {
       <div class="entry-icon">🔧</div>
       <div class="entry-main">
         <div class="entry-title">${maintTypeLabel(m.type)} · ${v ? escapeHtml(v.name) : "Veículo removido"}</div>
-        <div class="entry-sub">${fmtDateBR(m.date)} · ${fmtKm(m.odometer)} km${m.notes ? " · " + escapeHtml(m.notes) : ""}</div>
+        <div class="entry-sub">${fmtDateBR(m.date)} · ${fmtKm(m.odometer)} km${m.notes ? " · " + escapeHtml(m.notes) : ""}${createdByLabel(m.createdBy)}</div>
       </div>
       ${m.cost ? `<div class="entry-metric"><strong>${fmtMoney(m.cost)}</strong></div>` : ""}
     </div>`;
@@ -623,6 +794,7 @@ $("maintenance-form").addEventListener("submit", async (e) => {
       await maintenancesCol().doc(id).update(data);
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      data.createdBy = currentUser.uid;
       await maintenancesCol().add(data);
     }
     $("maintenance-modal").hidden = true;
@@ -674,7 +846,7 @@ function expenseCardHtml(x) {
       <div class="entry-icon">💳</div>
       <div class="entry-main">
         <div class="entry-title">${expenseCategoryLabel(x.category)} · ${v ? escapeHtml(v.name) : "Veículo removido"}</div>
-        <div class="entry-sub">${fmtDateBR(x.date)}${x.notes ? " · " + escapeHtml(x.notes) : ""}</div>
+        <div class="entry-sub">${fmtDateBR(x.date)}${x.notes ? " · " + escapeHtml(x.notes) : ""}${createdByLabel(x.createdBy)}</div>
       </div>
       <div class="entry-metric"><strong>${fmtMoney(x.amount)}</strong></div>
     </div>`;
@@ -731,6 +903,7 @@ $("expense-form").addEventListener("submit", async (e) => {
       await expensesCol().doc(id).update(data);
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      data.createdBy = currentUser.uid;
       await expensesCol().add(data);
     }
     $("expense-modal").hidden = true;
@@ -788,7 +961,7 @@ function fuelupCardHtml(f, calc) {
       <div class="entry-icon">${icon}</div>
       <div class="entry-main">
         <div class="entry-title">${escapeHtml(vName)} · ${fmtDateBR(f.date)}${f.nfceKey ? '<span class="nfce-badge">NF</span>' : ""}</div>
-        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${fuelLabel(f.fuelType)}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${fmtHoursMinutes(f.engineHours)} motor` : ""}${f.stationName ? ` · ${escapeHtml(f.stationName)}` : ""}</div>
+        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${fuelLabel(f.fuelType)}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${fmtHoursMinutes(f.engineHours)} motor` : ""}${f.stationName ? ` · ${escapeHtml(f.stationName)}` : ""}${createdByLabel(f.createdBy)}</div>
       </div>
       <div class="entry-metric">
         <strong>${fmtMoney(f.totalCost)}</strong>
@@ -936,6 +1109,7 @@ $("fuelup-form").addEventListener("submit", async (e) => {
       await fuelupsCol().doc(id).update(data);
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      data.createdBy = currentUser.uid;
       await fuelupsCol().add(data);
     }
     $("fuelup-modal").hidden = true;

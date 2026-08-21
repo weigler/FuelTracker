@@ -234,6 +234,7 @@
 
       <div class="settings-tabs">
         <button class="settings-tab-btn active" data-settings-tab="account">Conta</button>
+        <button class="settings-tab-btn" data-settings-tab="family">Família</button>
         <button class="settings-tab-btn" data-settings-tab="appearance">Aparência</button>
         <button class="settings-tab-btn" data-settings-tab="backup">Backup</button>
         <button class="settings-tab-btn" data-settings-tab="pdf">Exportar PDF</button>
@@ -245,6 +246,28 @@
           <p class="settings-row"><span>Conta</span><span id="settings-email">—</span></p>
           <button class="btn btn-danger btn-block" id="settings-logout-btn">Sair da conta</button>
         </div>
+      </div>
+
+      <!-- Família -->
+      <div class="settings-pane" id="settings-pane-family" hidden>
+        <p class="settings-section-title">Membros do grupo</p>
+        <div id="family-members-list" class="backup-list"></div>
+
+        <p class="settings-section-title">Código de convite</p>
+        <p class="settings-hint">Compartilhe este código com quem você quer que veja e lance abastecimentos junto com você. Trate como uma senha — quem tiver o código entra no grupo.</p>
+        <div class="invite-code-row">
+          <span id="invite-code-display">——— · ————</span>
+          <button type="button" class="btn-icon" id="copy-invite-code-btn" title="Copiar código" aria-label="Copiar código">📋</button>
+        </div>
+        <button class="btn btn-secondary btn-block" id="regenerate-invite-btn">Gerar novo código</button>
+
+        <p class="settings-section-title">Entrar em outro grupo</p>
+        <p class="settings-hint">Se alguém te passou um código, digite aqui pra entrar no grupo dessa pessoa. Seus dados atuais continuam guardados, mas o app passa a mostrar o grupo novo.</p>
+        <div class="field-row">
+          <input type="text" id="join-code-input" placeholder="XXX-XXXX" maxlength="8" style="text-transform:uppercase" />
+          <button type="button" class="btn btn-primary" id="join-household-btn">Entrar</button>
+        </div>
+        <p id="join-status" class="settings-hint" hidden></p>
       </div>
 
       <!-- Aparência -->

@@ -22,6 +22,7 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 - **Tema claro/escuro**, em Ajustes → Aparência (preferência salva no aparelho)
 - **Backup e restauração no Firestore**, em Ajustes → Backup: "Criar backup agora" grava um snapshot dos seus veículos e abastecimentos numa coleção própria (`users/{uid}/backups`) — não é um arquivo, fica dentro da sua conta. A lista de backups mostra data/hora e quantidade de registros, com "Restaurar" (atualiza pelo mesmo ID, sem apagar nada) e excluir
 - **Exportar relatório em PDF**, em Ajustes → Exportar PDF: filtra por período (semana, mês, tudo ou datas personalizadas), por veículo (um ou todos) — o filtro de combustível mostra só os tipos já usados por esse veículo — o PDF sai estilizado, com cabeçalho colorido, cards de resumo (gasto total, preço médio, km rodados, consumo médio), mini-gráficos de gasto por mês, consumo e preço do combustível ao longo do tempo, e a tabela detalhada dos abastecimentos
+- **Grupo (uso compartilhado)**: em Ajustes → Família, gere um código de convite e compartilhe com quem você quer que veja e lance abastecimentos com você — a pessoa cria a própria conta e entra com o código. Cada lançamento guarda quem fez, mostrado como "· por Fulano" quando o grupo tem mais de uma pessoa. Migração automática: na primeira vez que você abrir o app depois dessa atualização, seus dados antigos são copiados sozinhos para o novo formato de grupo, sem precisar de nada manual
 - **PWA instalável**, funciona offline para a interface (dados do Firestore precisam de internet)
 
 ## Estrutura de arquivos
@@ -43,20 +44,59 @@ O projeto já está configurado para usar o Firebase `tanquecheio-2026` (veja `f
 
 1. **Authentication → Sign-in method** → "E-mail/senha" está ativado
 2. **Firestore Database** → criado (modo produção)
-3. **Firestore → Regras** → aplicadas as regras abaixo (também estão comentadas no fim do `firebase-config.js`):
+3. **Firestore → Regras** → aplicadas as regras abaixo
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Dados antigos (antes de existir "grupo"). Mantidos só como
+    // fallback de migração automática — o app não escreve mais aqui.
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Mapa código de convite -> id do grupo. Não guarda dado sensível,
+    // só existe pra alguém com o código achar o grupo. "get" (leitura de
+    // um documento específico, cujo id você já precisa saber) é liberado
+    // pra qualquer usuário logado; não existe "list" (não dá pra listar
+    // todos os códigos).
+    match /householdInvites/{code} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null &&
+        request.auth.uid in get(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.members;
+      allow delete: if request.auth != null &&
+        request.auth.uid in get(/databases/$(database)/documents/households/$(resource.data.householdId)).data.members;
+    }
+
+    match /households/{householdId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.members;
+      allow create: if request.auth != null && request.resource.data.members == [request.auth.uid];
+      allow update: if request.auth != null && (
+        // membro atual editando o grupo (ex.: gerar novo código), continuando membro
+        (request.auth.uid in resource.data.members && request.auth.uid in request.resource.data.members) ||
+        // entrar via código: só pode adicionar o próprio uid, um de cada vez
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberNames']) &&
+          request.resource.data.members.size() == resource.data.members.size() + 1 &&
+          request.resource.data.members.hasAll(resource.data.members) &&
+          request.auth.uid in request.resource.data.members
+        )
+      );
+      allow delete: if false;
+
+      // veículos, abastecimentos, manutenções, despesas e backups do grupo
+      match /{document=**} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+      }
     }
   }
 }
 ```
 
-Cada usuário só enxerga e grava os próprios dados, em `users/{uid}/vehicles`, `users/{uid}/fuelups`, `users/{uid}/maintenances`, `users/{uid}/expenses` e `users/{uid}/backups`. A regra com `{document=**}` já cobre todas — não precisa mexer nela ao adicionar coleções novas.
+Cada grupo só é visível e editável por quem está na lista `members` desse grupo — a regra com `{document=**}` dentro de `households/{householdId}` já cobre `vehicles`, `fuelups`, `maintenances`, `expenses` e `backups` automaticamente.
 
 ## Publicando no GitHub Pages
 
@@ -85,6 +125,8 @@ O QR Code impresso no cupom da NFC-e sempre traz a **chave de acesso de 44 dígi
 **Por que sempre aparece uma prévia para conferir:** o formato exato do QR varia de estado para estado e entre versões, então o valor detectado pode ocasionalmente vir errado ou não ser identificado. A prévia mostra o que foi lido antes de aplicar ao formulário — nunca é salvo direto, encaixando com o seu hábito de sempre conferir os valores.
 
 ## Notas técnicas
+
+- **Sobre o convite por código:** funciona inteiramente sem servidor (sem Cloud Functions, sem plano pago), mas a segurança se apoia em o id do grupo ser praticamente impossível de adivinhar — não há verificação adicional de identidade além de "quem tem o código, entra". Suficiente para uso familiar/pessoal; se algum dia o app for usado por muita gente publicamente, vale migrar o convite pra um fluxo com Cloud Functions (validação server-side, expiração automática do código, etc.).
 
 - Sem etapa de build — abre direto no navegador
 - Firebase via SDK compat (script tags), Chart.js, jsQR e jsPDF (+ autoTable) via CDN

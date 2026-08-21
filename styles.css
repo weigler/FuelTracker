@@ -599,6 +599,23 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .backup-meta { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
 .backup-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
+.invite-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+#invite-code-display {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--amber);
+}
+
 /* ================= TABBAR ================= */
 .tabbar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
