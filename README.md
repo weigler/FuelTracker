@@ -15,7 +15,7 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 - **Gráficos**: consumo (km/l), preço do combustível e gasto mensal ao longo do tempo
 - **Tema claro/escuro**, em Ajustes → Aparência (preferência salva no aparelho)
 - **Backup e restauração** em JSON, em Ajustes → Backup: exportar tudo, ou restaurar um arquivo (atualiza registros existentes pelo ID, não apaga nada)
-- **Exportar relatório em PDF**, em Ajustes → Exportar PDF: filtra por período (semana, mês, tudo ou datas personalizadas), por veículo (um ou todos) e por tipo de combustível (um ou todos); o PDF traz a tabela de abastecimentos e um resumo (total gasto, litros, km rodados, consumo médio)
+- **Exportar relatório em PDF**, em Ajustes → Exportar PDF: filtra por período (semana, mês, tudo ou datas personalizadas), por veículo (um ou todos) e por tipo de combustível (um ou todos); o PDF sai estilizado, com cabeçalho colorido, cards de resumo (gasto total, preço médio, km rodados, consumo médio), mini-gráficos de gasto por mês e consumo ao longo do tempo, e a tabela detalhada dos abastecimentos
 - **PWA instalável**, funciona offline para a interface (dados do Firestore precisam de internet)
 
 ## Estrutura de arquivos

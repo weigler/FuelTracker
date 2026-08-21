@@ -1163,6 +1163,17 @@ function generatePdfReport() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 14;
+
+  // paleta igual à do app
+  const DARK = [23, 24, 27];
+  const AMBER = [232, 162, 61];
+  const TEAL = [43, 140, 130];
+  const CREAM = [247, 244, 238];
+  const TEXT_MAIN = [32, 31, 28];
+  const TEXT_DIM = [110, 109, 107];
+  const LINE = [225, 222, 214];
 
   const vehicleLabel = vehicleFilterId === "all"
     ? "Todos os veículos"
@@ -1172,13 +1183,162 @@ function generatePdfReport() {
     ? "Todo o período"
     : `${fmtDateBR(filtered[0].date)} a ${fmtDateBR(filtered[filtered.length - 1].date)}`;
 
-  doc.setFontSize(16);
-  doc.text("Tanque Cheio — Relatório de abastecimentos", 14, 18);
+  // ----- métricas -----
+  const totalCost = filtered.reduce((s, f) => s + Number(f.totalCost || 0), 0);
+  const totalLiters = filtered.reduce((s, f) => s + Number(f.liters || 0), 0);
+  const avgPrice = totalLiters > 0 ? totalCost / totalLiters : 0;
+
+  const byVehicleOdo = {};
+  filtered.forEach((f) => (byVehicleOdo[f.vehicleId] = byVehicleOdo[f.vehicleId] || []).push(f.odometer));
+  let totalKm = 0;
+  Object.values(byVehicleOdo).forEach((odos) => {
+    if (odos.length >= 2) totalKm += Math.max(...odos) - Math.min(...odos);
+  });
+
+  const kmlPoints = filtered.map((f) => consumptionMap.get(f.id)).filter(Boolean);
+  const avgKmL = kmlPoints.length ? kmlPoints.reduce((s, p) => s + p.kmPerLiter, 0) / kmlPoints.length : null;
+
+  /* ---------------- Cabeçalho ---------------- */
+  doc.setFillColor(...DARK);
+  doc.rect(0, 0, pageW, 32, "F");
+  doc.setFillColor(...AMBER);
+  doc.rect(0, 32, pageW, 1.4, "F");
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("Tanque Cheio", margin, 14);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(225, 222, 214);
+  doc.text(periodLabel, margin, 21.5);
+  doc.text(`${vehicleLabel}  ·  ${fuelFilterLabel}`, margin, 27);
+
+  doc.setFontSize(8);
+  doc.setTextColor(190, 187, 178);
+  doc.text(`Gerado em ${fmtDateBR(todayISO())}`, pageW - margin, 14, { align: "right" });
+  doc.text(`${filtered.length} abastecimento${filtered.length === 1 ? "" : "s"}`, pageW - margin, 19, { align: "right" });
+
+  let y = 42;
+
+  /* ---------------- Cards de KPI ---------------- */
+  const kpis = [
+    { label: "GASTO TOTAL", value: fmtMoney(totalCost) },
+    { label: "PREÇO MÉDIO / L", value: fmtMoney(avgPrice) },
+    { label: "KM RODADOS", value: totalKm > 0 ? fmtKm(totalKm) + " km" : "—" },
+    { label: "CONSUMO MÉDIO", value: avgKmL !== null ? avgKmL.toFixed(1) + " km/l" : "—" },
+  ];
+  const cardGap = 4;
+  const cardW = (pageW - margin * 2 - cardGap * 3) / 4;
+  const cardH = 22;
+  kpis.forEach((k, i) => {
+    const x = margin + i * (cardW + cardGap);
+    doc.setFillColor(...CREAM);
+    doc.roundedRect(x, y, cardW, cardH, 2, 2, "F");
+    doc.setFillColor(...AMBER);
+    doc.roundedRect(x, y, cardW, 1.6, 2, 2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12.5);
+    doc.setTextColor(...TEXT_MAIN);
+    doc.text(k.value, x + cardW / 2, y + 12.5, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.4);
+    doc.setTextColor(...TEXT_DIM);
+    doc.text(k.label, x + cardW / 2, y + 18, { align: "center" });
+  });
+  y += cardH + 11;
+
+  /* ---------------- Mini gráfico: gasto por mês ---------------- */
+  const monthTotals = {};
+  filtered.forEach((f) => {
+    const mk = monthKey(f.date);
+    monthTotals[mk] = (monthTotals[mk] || 0) + Number(f.totalCost || 0);
+  });
+  const monthKeysSorted = Object.keys(monthTotals).sort().slice(-8);
+  const monthNamesShort = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+  if (monthKeysSorted.length >= 2) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT_MAIN);
+    doc.text("Gasto por mês", margin, y);
+    y += 5;
+
+    const chartH = 26;
+    const chartW = pageW - margin * 2;
+    const maxVal = Math.max(...monthKeysSorted.map((mk) => monthTotals[mk]), 1);
+    const barGap = 3;
+    const barW = (chartW - barGap * (monthKeysSorted.length - 1)) / monthKeysSorted.length;
+
+    doc.setDrawColor(...LINE);
+    doc.line(margin, y + chartH, margin + chartW, y + chartH);
+
+    monthKeysSorted.forEach((mk, i) => {
+      const val = monthTotals[mk];
+      const h = Math.max((val / maxVal) * (chartH - 8), 1.5);
+      const x = margin + i * (barW + barGap);
+      doc.setFillColor(...AMBER);
+      doc.roundedRect(x, y + chartH - h, barW, h, 1, 1, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.2);
+      doc.setTextColor(...TEXT_MAIN);
+      doc.text(fmtMoney(val).replace("R$ ", ""), x + barW / 2, y + chartH - h - 1.6, { align: "center" });
+
+      const [yy, mm] = mk.split("-");
+      doc.setTextColor(...TEXT_DIM);
+      doc.text(`${monthNamesShort[parseInt(mm, 10) - 1]}/${yy.slice(2)}`, x + barW / 2, y + chartH + 4.5, { align: "center" });
+    });
+    y += chartH + 13;
+  }
+
+  /* ---------------- Mini gráfico: consumo ao longo do tempo ---------------- */
+  if (kmlPoints.length >= 2) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT_MAIN);
+    doc.text("Consumo ao longo do tempo (km/l)", margin, y);
+    y += 5;
+
+    const chartH = 24;
+    const chartW = pageW - margin * 2;
+    const vals = kmlPoints.map((p) => p.kmPerLiter);
+    const minV = Math.min(...vals);
+    const maxV = Math.max(...vals);
+    const range = maxV - minV || 1;
+
+    doc.setDrawColor(...LINE);
+    doc.setFillColor(...CREAM);
+    doc.roundedRect(margin, y, chartW, chartH, 2, 2, "DF");
+
+    doc.setDrawColor(...TEAL);
+    doc.setLineWidth(0.6);
+    let prevX, prevY;
+    kmlPoints.forEach((p, i) => {
+      const x = margin + 6 + (i / Math.max(kmlPoints.length - 1, 1)) * (chartW - 12);
+      const py = y + chartH - 4 - ((p.kmPerLiter - minV) / range) * (chartH - 8);
+      if (i > 0) doc.line(prevX, prevY, x, py);
+      doc.setFillColor(...TEAL);
+      doc.circle(x, py, 0.9, "F");
+      prevX = x;
+      prevY = py;
+    });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.4);
+    doc.setTextColor(...TEXT_DIM);
+    doc.text(`mín ${minV.toFixed(1)} km/l`, margin + 3, y + chartH - 2);
+    doc.text(`máx ${maxV.toFixed(1)} km/l`, margin + chartW - 3, y + 5, { align: "right" });
+    y += chartH + 13;
+  }
+
+  /* ---------------- Tabela detalhada ---------------- */
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.setTextColor(90);
-  doc.text(`Período: ${periodLabel}`, 14, 25);
-  doc.text(`Veículo: ${vehicleLabel}   ·   Combustível: ${fuelFilterLabel}`, 14, 30);
-  doc.text(`Gerado em ${fmtDateBR(todayISO())}`, 14, 35);
+  doc.setTextColor(...TEXT_MAIN);
+  doc.text("Abastecimentos", margin, y);
+  y += 3;
 
   const rows = filtered.map((f) => {
     const v = vehicles.find((x) => x.id === f.vehicleId);
@@ -1196,43 +1356,43 @@ function generatePdfReport() {
   });
 
   doc.autoTable({
-    startY: 40,
+    startY: y + 3,
     head: [["Data", "Veículo", "Odômetro", "Litros", "R$/L", "Total", "Combustível", "km/l"]],
     body: rows,
-    styles: { fontSize: 8, cellPadding: 3 },
-    headStyles: { fillColor: [232, 162, 61], textColor: [26, 18, 0] },
-    alternateRowStyles: { fillColor: [245, 245, 245] },
+    styles: { fontSize: 7.6, cellPadding: 2.6, textColor: TEXT_MAIN, lineColor: LINE, lineWidth: 0.15 },
+    headStyles: { fillColor: DARK, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.6 },
+    alternateRowStyles: { fillColor: CREAM },
+    margin: { left: margin, right: margin },
   });
 
-  const totalCost = filtered.reduce((s, f) => s + Number(f.totalCost || 0), 0);
-  const totalLiters = filtered.reduce((s, f) => s + Number(f.liters || 0), 0);
-  const avgPrice = totalLiters > 0 ? totalCost / totalLiters : 0;
-
-  const byVehicleOdo = {};
-  filtered.forEach((f) => (byVehicleOdo[f.vehicleId] = byVehicleOdo[f.vehicleId] || []).push(f.odometer));
-  let totalKm = 0;
-  Object.values(byVehicleOdo).forEach((odos) => {
-    if (odos.length >= 2) totalKm += Math.max(...odos) - Math.min(...odos);
-  });
-
-  const kmlValues = filtered.map((f) => consumptionMap.get(f.id)).filter(Boolean).map((c) => c.kmPerLiter);
-  const avgKmL = kmlValues.length ? kmlValues.reduce((s, v) => s + v, 0) / kmlValues.length : null;
-
-  const finalY = doc.lastAutoTable.finalY + 10;
-  doc.setFontSize(11);
-  doc.setTextColor(20);
-  doc.text("Resumo", 14, finalY);
-  doc.setFontSize(10);
-  doc.setTextColor(60);
+  /* ---------------- Resumo final ---------------- */
+  const finalY = doc.lastAutoTable.finalY + 9;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...TEXT_MAIN);
+  doc.text("Resumo", margin, finalY);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...TEXT_DIM);
   const summaryLines = [
     `Total gasto: ${fmtMoney(totalCost)}`,
     `Litros abastecidos: ${totalLiters.toFixed(2)} L`,
     `Preço médio por litro: ${fmtMoney(avgPrice)}`,
     `Km rodados no período (aprox.): ${totalKm > 0 ? fmtKm(totalKm) + " km" : "—"}`,
     `Consumo médio: ${avgKmL !== null ? avgKmL.toFixed(2) + " km/l" : "—"}`,
-    `Abastecimentos no período: ${filtered.length}`,
   ];
-  summaryLines.forEach((line, i) => doc.text(line, 14, finalY + 7 + i * 6));
+  summaryLines.forEach((line, i) => doc.text(line, margin, finalY + 6.5 + i * 5.5));
+
+  /* ---------------- Rodapé ---------------- */
+  const pageCount = doc.internal.getNumberOfPages();
+  const pageH = doc.internal.pageSize.getHeight();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...TEXT_DIM);
+    doc.text(`Tanque Cheio · Página ${p} de ${pageCount}`, pageW / 2, pageH - 8, { align: "center" });
+  }
 
   const fileVehiclePart = vehicleFilterId === "all" ? "todos" : vehicleLabel.toLowerCase().replace(/\s+/g, "-");
   const fileFuelPart = fuelFilter === "all" ? "todos" : fuelFilter;
