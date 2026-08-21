@@ -82,6 +82,7 @@ function checkTankCapacityWarning() {
   warnEl.hidden = false;
 }
 $("fuelup-vehicle").addEventListener("change", checkTankCapacityWarning);
+$("fuelup-vehicle").addEventListener("change", updateFuelupFuelTypeOptions);
 
 function vehicleIcon(type) {
   return type === "moto" ? "🏍" : "🚗";
@@ -94,8 +95,24 @@ const FUEL_LABELS = {
   etanol: "Etanol",
   "diesel-s10": "Diesel S10",
 };
+const ALL_FUEL_TYPES = Object.keys(FUEL_LABELS);
 function fuelLabel(type) {
   return FUEL_LABELS[type] || type;
+}
+
+// Restringe o seletor de combustível do abastecimento aos tipos que o
+// veículo selecionado aceita (cadastro do veículo). Sem restrição
+// cadastrada, mostra todos os tipos normalmente.
+function updateFuelupFuelTypeOptions() {
+  const sel = $("fuelup-fuel-type");
+  const previous = sel.value;
+  const vehicleId = $("fuelup-vehicle").value;
+  const v = vehicles.find((x) => x.id === vehicleId);
+  const accepted = v && Array.isArray(v.acceptedFuelTypes) && v.acceptedFuelTypes.length > 0
+    ? ALL_FUEL_TYPES.filter((t) => v.acceptedFuelTypes.includes(t))
+    : ALL_FUEL_TYPES;
+  sel.innerHTML = accepted.map((t) => `<option value="${t}">${fuelLabel(t)}</option>`).join("");
+  sel.value = accepted.includes(previous) ? previous : accepted[0];
 }
 
 /* ---------------- Auth ---------------- */
@@ -183,6 +200,7 @@ function attachListeners(uid) {
     fuelups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderFuelups();
     renderDashboard();
+    updatePdfFuelFilterOptions();
   }, (err) => toast("Erro ao carregar abastecimentos: " + err.message));
 
   unsubBackups = backupsCol().orderBy("createdAt", "desc").onSnapshot((snap) => {
@@ -251,11 +269,26 @@ function populateVehicleSelects() {
     `<option value="all">Todos os veículos</option>` +
     active.map((v) => `<option value="${v.id}">${vehicleIcon(v.type)} ${escapeHtml(v.name)}</option>`).join("");
   pdfSel.value = active.some((v) => v.id === prevPdf) ? prevPdf : "all";
+  updatePdfFuelFilterOptions();
 }
 $("dashboard-vehicle-filter").addEventListener("change", (e) => {
   dashboardFilter = e.target.value;
   renderDashboard();
 });
+
+// Mostra no filtro de combustível do PDF só os tipos já usados nos
+// abastecimentos (considerando o veículo selecionado no filtro ao lado).
+function updatePdfFuelFilterOptions() {
+  const sel = $("pdf-fuel-filter");
+  const previous = sel.value || "all";
+  const vehicleFilterId = $("pdf-vehicle-filter").value || "all";
+  const relevant = vehicleFilterId === "all" ? fuelups : fuelups.filter((f) => f.vehicleId === vehicleFilterId);
+  const used = ALL_FUEL_TYPES.filter((t) => relevant.some((f) => f.fuelType === t));
+  sel.innerHTML = `<option value="all">Todos os combustíveis</option>` +
+    used.map((t) => `<option value="${t}">${fuelLabel(t)}</option>`).join("");
+  sel.value = used.includes(previous) || previous === "all" ? previous : "all";
+}
+$("pdf-vehicle-filter").addEventListener("change", updatePdfFuelFilterOptions);
 
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -284,6 +317,7 @@ function vehicleCardHtml(v) {
       <div class="vehicle-info">
         <div class="vehicle-name">${escapeHtml(v.name)}</div>
         <div class="vehicle-meta">${v.type === "moto" ? "Moto" : "Carro"}${v.plate ? " · " + escapeHtml(v.plate) : ""}${v.tankCapacity ? ` · Tanque: ${v.tankCapacity} L` : ""} · ${count} abastecimento${count === 1 ? "" : "s"}</div>
+        ${v.acceptedFuelTypes && v.acceptedFuelTypes.length > 0 ? `<div class="vehicle-meta">Aceita: ${v.acceptedFuelTypes.map(fuelLabel).join(", ")}</div>` : ""}
       </div>
       <div class="vehicle-chevron">›</div>
     </div>`;
@@ -299,6 +333,10 @@ function openVehicleModal(id) {
   $("vehicle-type").value = v ? v.type : "moto";
   $("vehicle-plate").value = v ? v.plate || "" : "";
   $("vehicle-tank-capacity").value = v && v.tankCapacity !== null && v.tankCapacity !== undefined ? v.tankCapacity : "";
+  const accepted = (v && Array.isArray(v.acceptedFuelTypes)) ? v.acceptedFuelTypes : [];
+  document.querySelectorAll("#vehicle-fuel-types input[type=checkbox]").forEach((cb) => {
+    cb.checked = accepted.includes(cb.value);
+  });
   $("vehicle-modal-title").textContent = v ? "Editar veículo" : "Novo veículo";
   $("vehicle-archive-btn").hidden = !v;
   $("vehicle-archive-btn").textContent = v && v.archived ? "Reativar" : "Arquivar";
@@ -315,6 +353,7 @@ $("vehicle-form").addEventListener("submit", async (e) => {
     type: $("vehicle-type").value,
     plate: $("vehicle-plate").value.trim(),
     tankCapacity: parseOptionalNumber($("vehicle-tank-capacity").value),
+    acceptedFuelTypes: Array.from(document.querySelectorAll("#vehicle-fuel-types input[type=checkbox]:checked")).map((cb) => cb.value),
     archived: id ? (vehicles.find((v) => v.id === id) || {}).archived || false : false,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -428,6 +467,7 @@ function openFuelupModal(id) {
   $("fuelup-modal-title").textContent = f ? "Editar abastecimento" : "Novo abastecimento";
   if (f) {
     $("fuelup-vehicle").value = f.vehicleId;
+    updateFuelupFuelTypeOptions();
     $("fuelup-date").value = f.date;
     $("fuelup-odometer").value = f.odometer;
     $("fuelup-liters").value = f.liters;
@@ -439,11 +479,11 @@ function openFuelupModal(id) {
     $("fuelup-vehicle-kml").value = f.vehicleKmL ?? "";
     $("fuelup-notes").value = f.notes || "";
   } else {
+    updateFuelupFuelTypeOptions();
     $("fuelup-date").value = todayISO();
     $("fuelup-odometer").value = "";
     $("fuelup-liters").value = "";
     $("fuelup-total").value = "";
-    $("fuelup-fuel-type").value = "gasolina";
     $("fuelup-full-tank").checked = true;
     setEngineHoursFields(null);
     $("fuelup-vehicle-avg-speed").value = "";
@@ -1211,6 +1251,45 @@ function pdfDateRange() {
   };
 }
 
+// Desenha um mini-gráfico de linha no PDF (usado por consumo e por preço) e
+// retorna o novo cursor Y, já com o espaçamento para o próximo bloco.
+function drawPdfMiniLineChart(doc, { x, y, w, h, title, values, color, valueFmt, textMain, textDim, line, cream }) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...textMain);
+  doc.text(title, x, y);
+  y += 5;
+
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV - minV || 1;
+
+  doc.setDrawColor(...line);
+  doc.setFillColor(...cream);
+  doc.roundedRect(x, y, w, h, 2, 2, "DF");
+
+  doc.setDrawColor(...color);
+  doc.setLineWidth(0.6);
+  let prevX, prevY;
+  values.forEach((v, i) => {
+    const px = x + 6 + (i / Math.max(values.length - 1, 1)) * (w - 12);
+    const py = y + h - 4 - ((v - minV) / range) * (h - 8);
+    if (i > 0) doc.line(prevX, prevY, px, py);
+    doc.setFillColor(...color);
+    doc.circle(px, py, 0.9, "F");
+    prevX = px;
+    prevY = py;
+  });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.4);
+  doc.setTextColor(...textDim);
+  doc.text(`mín ${valueFmt(minV)}`, x + 3, y + h - 2);
+  doc.text(`máx ${valueFmt(maxV)}`, x + w - 3, y + 5, { align: "right" });
+
+  return y + h + 13;
+}
+
 function generatePdfReport() {
   const statusEl = $("pdf-status");
   statusEl.hidden = false;
@@ -1372,42 +1451,28 @@ function generatePdfReport() {
 
   /* ---------------- Mini gráfico: consumo ao longo do tempo ---------------- */
   if (kmlPoints.length >= 2) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...TEXT_MAIN);
-    doc.text("Consumo ao longo do tempo (km/l)", margin, y);
-    y += 5;
-
-    const chartH = 24;
-    const chartW = pageW - margin * 2;
-    const vals = kmlPoints.map((p) => p.kmPerLiter);
-    const minV = Math.min(...vals);
-    const maxV = Math.max(...vals);
-    const range = maxV - minV || 1;
-
-    doc.setDrawColor(...LINE);
-    doc.setFillColor(...CREAM);
-    doc.roundedRect(margin, y, chartW, chartH, 2, 2, "DF");
-
-    doc.setDrawColor(...TEAL);
-    doc.setLineWidth(0.6);
-    let prevX, prevY;
-    kmlPoints.forEach((p, i) => {
-      const x = margin + 6 + (i / Math.max(kmlPoints.length - 1, 1)) * (chartW - 12);
-      const py = y + chartH - 4 - ((p.kmPerLiter - minV) / range) * (chartH - 8);
-      if (i > 0) doc.line(prevX, prevY, x, py);
-      doc.setFillColor(...TEAL);
-      doc.circle(x, py, 0.9, "F");
-      prevX = x;
-      prevY = py;
+    y = drawPdfMiniLineChart(doc, {
+      x: margin, y, w: pageW - margin * 2, h: 24,
+      title: "Consumo ao longo do tempo (km/l)",
+      values: kmlPoints.map((p) => p.kmPerLiter),
+      color: TEAL, valueFmt: (v) => v.toFixed(1) + " km/l",
+      textMain: TEXT_MAIN, textDim: TEXT_DIM, line: LINE, cream: CREAM,
     });
+  }
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.4);
-    doc.setTextColor(...TEXT_DIM);
-    doc.text(`mín ${minV.toFixed(1)} km/l`, margin + 3, y + chartH - 2);
-    doc.text(`máx ${maxV.toFixed(1)} km/l`, margin + chartW - 3, y + 5, { align: "right" });
-    y += chartH + 13;
+  /* ---------------- Mini gráfico: preço do combustível ---------------- */
+  const priceSeries = [...filtered]
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .map((f) => Number(f.pricePerLiter))
+    .filter((v) => v > 0);
+  if (priceSeries.length >= 2) {
+    y = drawPdfMiniLineChart(doc, {
+      x: margin, y, w: pageW - margin * 2, h: 24,
+      title: "Preço do combustível (R$/l)",
+      values: priceSeries,
+      color: AMBER, valueFmt: (v) => fmtMoney(v),
+      textMain: TEXT_MAIN, textDim: TEXT_DIM, line: LINE, cream: CREAM,
+    });
   }
 
   /* ---------------- Tabela detalhada ---------------- */

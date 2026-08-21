@@ -5,7 +5,7 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 ## Funcionalidades
 
 - **Login por e-mail e senha** (Firebase Authentication)
-- **Veículos**: cadastro de múltiplos veículos (moto/carro), apelido, placa, capacidade do tanque (conforme o manual), arquivar ou excluir
+- **Veículos**: cadastro de múltiplos veículos (moto/carro), apelido, placa, capacidade do tanque (conforme o manual), combustíveis aceitos (opcional, também conforme o manual — filtra o seletor de combustível ao abastecer esse veículo), arquivar ou excluir
 - **Abastecimentos**: km, litros, valor total, tipo de combustível (Gasolina, Gasolina Aditivada, Gasolina Premium, Etanol, Diesel S10), se foi tanque cheio
   - Dois jeitos de calcular: informe **litros + total** (calcula o R$/litro) ou, sem o cupom em mãos, informe **total pago no cartão + preço do litro anotado na bomba** (calcula os litros)
   - Aviso automático (não bloqueia) se os litros informados passarem da capacidade do tanque cadastrada
@@ -15,7 +15,7 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 - **Gráficos**: consumo (km/l), preço do combustível e gasto mensal ao longo do tempo
 - **Tema claro/escuro**, em Ajustes → Aparência (preferência salva no aparelho)
 - **Backup e restauração no Firestore**, em Ajustes → Backup: "Criar backup agora" grava um snapshot dos seus veículos e abastecimentos numa coleção própria (`users/{uid}/backups`) — não é um arquivo, fica dentro da sua conta. A lista de backups mostra data/hora e quantidade de registros, com "Restaurar" (atualiza pelo mesmo ID, sem apagar nada) e excluir
-- **Exportar relatório em PDF**, em Ajustes → Exportar PDF: filtra por período (semana, mês, tudo ou datas personalizadas), por veículo (um ou todos) e por tipo de combustível (um ou todos); o PDF sai estilizado, com cabeçalho colorido, cards de resumo (gasto total, preço médio, km rodados, consumo médio), mini-gráficos de gasto por mês e consumo ao longo do tempo, e a tabela detalhada dos abastecimentos
+- **Exportar relatório em PDF**, em Ajustes → Exportar PDF: filtra por período (semana, mês, tudo ou datas personalizadas), por veículo (um ou todos) — o filtro de combustível mostra só os tipos já usados por esse veículo — o PDF sai estilizado, com cabeçalho colorido, cards de resumo (gasto total, preço médio, km rodados, consumo médio), mini-gráficos de gasto por mês, consumo e preço do combustível ao longo do tempo, e a tabela detalhada dos abastecimentos
 - **PWA instalável**, funciona offline para a interface (dados do Firestore precisam de internet)
 
 ## Estrutura de arquivos

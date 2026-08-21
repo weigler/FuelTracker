@@ -141,6 +141,17 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .checkbox-field { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-dim); }
 .checkbox-field input { width: 18px; height: 18px; accent-color: var(--amber); }
 
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.checkbox-grid .checkbox-field { font-size: 13px; }
+
 /* ---- Importação de NFC-e ---- */
 .nfce-import {
   background: var(--panel);

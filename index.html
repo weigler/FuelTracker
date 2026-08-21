@@ -393,6 +393,17 @@
         <span>Capacidade do tanque (L) — opcional</span>
         <input type="number" id="vehicle-tank-capacity" min="0" step="0.1" placeholder="Ex.: 14 (conforme o manual)" />
       </label>
+      <div class="field">
+        <span>Combustíveis aceitos (opcional — conforme o manual)</span>
+        <div class="checkbox-grid" id="vehicle-fuel-types">
+          <label class="checkbox-field"><input type="checkbox" value="gasolina" /> Gasolina</label>
+          <label class="checkbox-field"><input type="checkbox" value="gasolina-aditivada" /> Gasolina Aditivada</label>
+          <label class="checkbox-field"><input type="checkbox" value="gasolina-premium" /> Gasolina Premium</label>
+          <label class="checkbox-field"><input type="checkbox" value="etanol" /> Etanol</label>
+          <label class="checkbox-field"><input type="checkbox" value="diesel-s10" /> Diesel S10</label>
+        </div>
+        <p class="field-hint">Se nenhum for marcado, o app não restringe — todos os combustíveis ficam disponíveis para esse veículo.</p>
+      </div>
       <p id="vehicle-error" class="auth-error" hidden></p>
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="vehicle-archive-btn" hidden>Arquivar</button>
