@@ -11,9 +11,13 @@ let currentUser = null;
 let vehicles = [];      // todos os veículos do usuário
 let fuelups = [];       // todos os abastecimentos do usuário
 let backups = [];       // snapshots de backup guardados no Firestore
+let maintenances = [];  // registros de manutenção
+let expenses = [];      // despesas (IPVA, seguro, etc.)
 let unsubVehicles = null;
 let unsubFuelups = null;
 let unsubBackups = null;
+let unsubMaintenances = null;
+let unsubExpenses = null;
 let dashboardFilter = "all";
 let charts = { consumption: null, price: null, cost: null };
 
@@ -178,9 +182,13 @@ auth.onAuthStateChanged((user) => {
     if (unsubVehicles) unsubVehicles();
     if (unsubFuelups) unsubFuelups();
     if (unsubBackups) unsubBackups();
+    if (unsubMaintenances) unsubMaintenances();
+    if (unsubExpenses) unsubExpenses();
     vehicles = [];
     fuelups = [];
     backups = [];
+    maintenances = [];
+    expenses = [];
   }
 });
 
@@ -207,10 +215,29 @@ function attachListeners(uid) {
     backups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderBackups();
   }, (err) => toast("Erro ao carregar backups: " + err.message));
+
+  unsubMaintenances = maintenancesCol().onSnapshot((snap) => {
+    maintenances = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderMaintenances();
+    renderMaintenanceDue();
+    renderDashboard();
+  }, (err) => toast("Erro ao carregar manutenções: " + err.message));
+
+  unsubExpenses = expensesCol().onSnapshot((snap) => {
+    expenses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderExpenses();
+    renderDashboard();
+  }, (err) => toast("Erro ao carregar despesas: " + err.message));
 }
 
 function backupsCol() {
   return db.collection("users").doc(currentUser.uid).collection("backups");
+}
+function maintenancesCol() {
+  return db.collection("users").doc(currentUser.uid).collection("maintenances");
+}
+function expensesCol() {
+  return db.collection("users").doc(currentUser.uid).collection("expenses");
 }
 
 function vehiclesCol() {
@@ -236,6 +263,15 @@ document.querySelectorAll(".settings-tab-btn").forEach((btn) => {
     btn.classList.add("active");
     document.querySelectorAll(".settings-pane").forEach((p) => (p.hidden = true));
     $("settings-pane-" + btn.dataset.settingsTab).hidden = false;
+  });
+});
+
+document.querySelectorAll(".maint-tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".maint-tab-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".maint-pane").forEach((p) => (p.hidden = true));
+    $("maint-pane-" + btn.dataset.maintTab).hidden = false;
   });
 });
 
@@ -270,6 +306,21 @@ function populateVehicleSelects() {
     active.map((v) => `<option value="${v.id}">${vehicleIcon(v.type)} ${escapeHtml(v.name)}</option>`).join("");
   pdfSel.value = active.some((v) => v.id === prevPdf) ? prevPdf : "all";
   updatePdfFuelFilterOptions();
+
+  // selects dos formulários de manutenção e despesa
+  const maintSel = $("maintenance-vehicle");
+  const prevMaint = maintSel.value;
+  maintSel.innerHTML = active
+    .map((v) => `<option value="${v.id}">${vehicleIcon(v.type)} ${escapeHtml(v.name)}</option>`)
+    .join("");
+  if (active.some((v) => v.id === prevMaint)) maintSel.value = prevMaint;
+
+  const expSel = $("expense-vehicle");
+  const prevExp = expSel.value;
+  expSel.innerHTML = active
+    .map((v) => `<option value="${v.id}">${vehicleIcon(v.type)} ${escapeHtml(v.name)}</option>`)
+    .join("");
+  if (active.some((v) => v.id === prevExp)) expSel.value = prevExp;
 }
 $("dashboard-vehicle-filter").addEventListener("change", (e) => {
   dashboardFilter = e.target.value;
@@ -333,6 +384,7 @@ function openVehicleModal(id) {
   $("vehicle-type").value = v ? v.type : "moto";
   $("vehicle-plate").value = v ? v.plate || "" : "";
   $("vehicle-tank-capacity").value = v && v.tankCapacity !== null && v.tankCapacity !== undefined ? v.tankCapacity : "";
+  $("vehicle-monthly-budget").value = v && v.monthlyBudget !== null && v.monthlyBudget !== undefined ? v.monthlyBudget : "";
   const accepted = (v && Array.isArray(v.acceptedFuelTypes)) ? v.acceptedFuelTypes : [];
   document.querySelectorAll("#vehicle-fuel-types input[type=checkbox]").forEach((cb) => {
     cb.checked = accepted.includes(cb.value);
@@ -353,6 +405,7 @@ $("vehicle-form").addEventListener("submit", async (e) => {
     type: $("vehicle-type").value,
     plate: $("vehicle-plate").value.trim(),
     tankCapacity: parseOptionalNumber($("vehicle-tank-capacity").value),
+    monthlyBudget: parseOptionalNumber($("vehicle-monthly-budget").value),
     acceptedFuelTypes: Array.from(document.querySelectorAll("#vehicle-fuel-types input[type=checkbox]:checked")).map((cb) => cb.value),
     archived: id ? (vehicles.find((v) => v.id === id) || {}).archived || false : false,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -400,6 +453,303 @@ $("vehicle-delete-btn").addEventListener("click", async () => {
 });
 
 /* ================================================================
+   MANUTENÇÃO
+   ================================================================ */
+const MAINT_TYPE_LABELS = {
+  oleo: "Troca de óleo",
+  "filtro-oleo": "Filtro de óleo",
+  "filtro-ar": "Filtro de ar",
+  "filtro-combustivel": "Filtro de combustível",
+  pneus: "Pneus",
+  freios: "Freios (pastilhas/lonas)",
+  bateria: "Bateria",
+  alinhamento: "Alinhamento/balanceamento",
+  revisao: "Revisão geral",
+  correia: "Correia dentada/acessórios",
+  outro: "Outro",
+};
+function maintTypeLabel(t) {
+  return MAINT_TYPE_LABELS[t] || t;
+}
+
+// Odômetro mais recente conhecido de um veículo (do último abastecimento)
+function latestOdometer(vehicleId) {
+  const list = fuelups.filter((f) => f.vehicleId === vehicleId);
+  if (list.length === 0) return null;
+  return Math.max(...list.map((f) => f.odometer));
+}
+
+function renderMaintenances() {
+  const sorted = [...maintenances].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  $("maintenance-empty").hidden = sorted.length > 0;
+  $("maintenance-list").innerHTML = sorted.map(maintenanceCardHtml).join("");
+  document.querySelectorAll("[data-maintenance-open]").forEach((el) => {
+    el.addEventListener("click", () => openMaintenanceModal(el.dataset.maintenanceOpen));
+  });
+}
+
+function maintenanceCardHtml(m) {
+  const v = vehicles.find((x) => x.id === m.vehicleId);
+  return `
+    <div class="entry-card" data-maintenance-open="${m.id}">
+      <div class="entry-icon">🔧</div>
+      <div class="entry-main">
+        <div class="entry-title">${maintTypeLabel(m.type)} · ${v ? escapeHtml(v.name) : "Veículo removido"}</div>
+        <div class="entry-sub">${fmtDateBR(m.date)} · ${fmtKm(m.odometer)} km${m.notes ? " · " + escapeHtml(m.notes) : ""}</div>
+      </div>
+      ${m.cost ? `<div class="entry-metric"><strong>${fmtMoney(m.cost)}</strong></div>` : ""}
+    </div>`;
+}
+
+// Calcula quais manutenções estão vencendo/vencidas, comparando o odômetro
+// mais recente do veículo com odômetro do último registro + intervalo, e a
+// data de hoje com a data do último registro + meses de intervalo.
+function computeMaintenanceDue() {
+  const latestByKey = {};
+  maintenances.forEach((m) => {
+    const key = m.vehicleId + "::" + m.type;
+    if (!latestByKey[key] || m.date > latestByKey[key].date) latestByKey[key] = m;
+  });
+
+  const due = [];
+  Object.values(latestByKey).forEach((m) => {
+    const v = vehicles.find((x) => x.id === m.vehicleId);
+    if (!v || v.archived) return;
+    const currentOdo = latestOdometer(m.vehicleId);
+
+    if (m.intervalKm && currentOdo !== null) {
+      const nextDueOdo = m.odometer + m.intervalKm;
+      const remaining = nextDueOdo - currentOdo;
+      if (remaining <= 500) {
+        due.push({
+          vehicleName: v.name, type: m.type,
+          overdue: remaining <= 0,
+          label: remaining <= 0
+            ? `Venceu há ${fmtKm(Math.abs(remaining))} km`
+            : `Faltam ${fmtKm(remaining)} km`,
+        });
+      }
+    }
+    if (m.intervalMonths) {
+      const lastDate = new Date(m.date + "T00:00:00");
+      const nextDue = new Date(lastDate);
+      nextDue.setMonth(nextDue.getMonth() + m.intervalMonths);
+      const today = new Date();
+      const diffDays = Math.round((nextDue - today) / 86400000);
+      if (diffDays <= 30) {
+        due.push({
+          vehicleName: v.name, type: m.type,
+          overdue: diffDays <= 0,
+          label: diffDays <= 0
+            ? `Venceu em ${fmtDateBR(nextDue.toISOString().slice(0, 10))}`
+            : `Vence em ${fmtDateBR(nextDue.toISOString().slice(0, 10))}`,
+        });
+      }
+    }
+  });
+  return due;
+}
+
+function renderMaintenanceDue() {
+  const due = computeMaintenanceDue();
+  const el = $("maintenance-due-list");
+  el.innerHTML = due.map((d) => `
+    <div class="due-item ${d.overdue ? "" : "warning"}">
+      <div>
+        <div class="due-title">${maintTypeLabel(d.type)} · ${escapeHtml(d.vehicleName)}</div>
+        <div class="due-meta">${d.label}</div>
+      </div>
+      <span class="due-badge ${d.overdue ? "" : "warning"}">${d.overdue ? "Vencida" : "Em breve"}</span>
+    </div>`).join("");
+}
+
+$("add-maintenance-btn").addEventListener("click", () => openMaintenanceModal(null));
+$("maintenance-modal-close").addEventListener("click", () => ($("maintenance-modal").hidden = true));
+
+function openMaintenanceModal(id) {
+  if (vehicles.filter((v) => !v.archived).length === 0) {
+    toast("Cadastre um veículo primeiro.");
+    return;
+  }
+  const m = maintenances.find((x) => x.id === id);
+  $("maintenance-id").value = id || "";
+  $("maintenance-modal-title").textContent = m ? "Editar manutenção" : "Nova manutenção";
+  if (m) {
+    $("maintenance-vehicle").value = m.vehicleId;
+    $("maintenance-type").value = m.type;
+    $("maintenance-date").value = m.date;
+    $("maintenance-odometer").value = m.odometer;
+    $("maintenance-cost").value = m.cost ?? "";
+    $("maintenance-interval-km").value = m.intervalKm ?? "";
+    $("maintenance-interval-months").value = m.intervalMonths ?? "";
+    $("maintenance-notes").value = m.notes || "";
+  } else {
+    $("maintenance-type").value = "oleo";
+    $("maintenance-date").value = todayISO();
+    $("maintenance-odometer").value = "";
+    $("maintenance-cost").value = "";
+    $("maintenance-interval-km").value = "";
+    $("maintenance-interval-months").value = "";
+    $("maintenance-notes").value = "";
+  }
+  $("maintenance-delete-btn").hidden = !m;
+  $("maintenance-error").hidden = true;
+  $("maintenance-modal").hidden = false;
+}
+
+$("maintenance-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = $("maintenance-id").value;
+  const odometer = parseFloat($("maintenance-odometer").value);
+  const errEl = $("maintenance-error");
+  if (!(odometer >= 0)) {
+    errEl.textContent = "Confira o valor do odômetro.";
+    errEl.hidden = false;
+    return;
+  }
+  const data = {
+    vehicleId: $("maintenance-vehicle").value,
+    type: $("maintenance-type").value,
+    date: $("maintenance-date").value,
+    odometer,
+    cost: parseOptionalNumber($("maintenance-cost").value),
+    intervalKm: parseOptionalNumber($("maintenance-interval-km").value),
+    intervalMonths: parseOptionalNumber($("maintenance-interval-months").value),
+    notes: $("maintenance-notes").value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    if (id) {
+      await maintenancesCol().doc(id).update(data);
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await maintenancesCol().add(data);
+    }
+    $("maintenance-modal").hidden = true;
+    toast("Manutenção salva.");
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  }
+});
+
+$("maintenance-delete-btn").addEventListener("click", async () => {
+  const id = $("maintenance-id").value;
+  if (!confirm("Excluir este registro de manutenção?")) return;
+  await maintenancesCol().doc(id).delete();
+  $("maintenance-modal").hidden = true;
+  toast("Manutenção excluída.");
+});
+
+/* ================================================================
+   DESPESAS (IPVA, seguro, licenciamento, etc.)
+   ================================================================ */
+const EXPENSE_CATEGORY_LABELS = {
+  ipva: "IPVA",
+  seguro: "Seguro",
+  licenciamento: "Licenciamento",
+  estacionamento: "Estacionamento",
+  multa: "Multa",
+  lavagem: "Lavagem",
+  pedagio: "Pedágio",
+  outro: "Outra",
+};
+function expenseCategoryLabel(c) {
+  return EXPENSE_CATEGORY_LABELS[c] || c;
+}
+
+function renderExpenses() {
+  const sorted = [...expenses].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  $("expense-empty").hidden = sorted.length > 0;
+  $("expense-list").innerHTML = sorted.map(expenseCardHtml).join("");
+  document.querySelectorAll("[data-expense-open]").forEach((el) => {
+    el.addEventListener("click", () => openExpenseModal(el.dataset.expenseOpen));
+  });
+}
+
+function expenseCardHtml(x) {
+  const v = vehicles.find((veh) => veh.id === x.vehicleId);
+  return `
+    <div class="entry-card" data-expense-open="${x.id}">
+      <div class="entry-icon">💳</div>
+      <div class="entry-main">
+        <div class="entry-title">${expenseCategoryLabel(x.category)} · ${v ? escapeHtml(v.name) : "Veículo removido"}</div>
+        <div class="entry-sub">${fmtDateBR(x.date)}${x.notes ? " · " + escapeHtml(x.notes) : ""}</div>
+      </div>
+      <div class="entry-metric"><strong>${fmtMoney(x.amount)}</strong></div>
+    </div>`;
+}
+
+$("add-expense-btn").addEventListener("click", () => openExpenseModal(null));
+$("expense-modal-close").addEventListener("click", () => ($("expense-modal").hidden = true));
+
+function openExpenseModal(id) {
+  if (vehicles.filter((v) => !v.archived).length === 0) {
+    toast("Cadastre um veículo primeiro.");
+    return;
+  }
+  const x = expenses.find((i) => i.id === id);
+  $("expense-id").value = id || "";
+  $("expense-modal-title").textContent = x ? "Editar despesa" : "Nova despesa";
+  if (x) {
+    $("expense-vehicle").value = x.vehicleId;
+    $("expense-category").value = x.category;
+    $("expense-date").value = x.date;
+    $("expense-amount").value = x.amount;
+    $("expense-notes").value = x.notes || "";
+  } else {
+    $("expense-category").value = "ipva";
+    $("expense-date").value = todayISO();
+    $("expense-amount").value = "";
+    $("expense-notes").value = "";
+  }
+  $("expense-delete-btn").hidden = !x;
+  $("expense-error").hidden = true;
+  $("expense-modal").hidden = false;
+}
+
+$("expense-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = $("expense-id").value;
+  const amount = parseFloat($("expense-amount").value);
+  const errEl = $("expense-error");
+  if (!(amount > 0)) {
+    errEl.textContent = "Confira o valor da despesa.";
+    errEl.hidden = false;
+    return;
+  }
+  const data = {
+    vehicleId: $("expense-vehicle").value,
+    category: $("expense-category").value,
+    date: $("expense-date").value,
+    amount,
+    notes: $("expense-notes").value.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    if (id) {
+      await expensesCol().doc(id).update(data);
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await expensesCol().add(data);
+    }
+    $("expense-modal").hidden = true;
+    toast("Despesa salva.");
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  }
+});
+
+$("expense-delete-btn").addEventListener("click", async () => {
+  const id = $("expense-id").value;
+  if (!confirm("Excluir esta despesa?")) return;
+  await expensesCol().doc(id).delete();
+  $("expense-modal").hidden = true;
+  toast("Despesa excluída.");
+});
+
+/* ================================================================
    ABASTECIMENTOS
    ================================================================ */
 function renderFuelups() {
@@ -438,7 +788,7 @@ function fuelupCardHtml(f, calc) {
       <div class="entry-icon">${icon}</div>
       <div class="entry-main">
         <div class="entry-title">${escapeHtml(vName)} · ${fmtDateBR(f.date)}${f.nfceKey ? '<span class="nfce-badge">NF</span>' : ""}</div>
-        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${fuelLabel(f.fuelType)}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${fmtHoursMinutes(f.engineHours)} motor` : ""}</div>
+        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${fuelLabel(f.fuelType)}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${fmtHoursMinutes(f.engineHours)} motor` : ""}${f.stationName ? ` · ${escapeHtml(f.stationName)}` : ""}</div>
       </div>
       <div class="entry-metric">
         <strong>${fmtMoney(f.totalCost)}</strong>
@@ -477,6 +827,8 @@ function openFuelupModal(id) {
     setEngineHoursFields(f.engineHours);
     $("fuelup-vehicle-avg-speed").value = f.vehicleAvgSpeed ?? "";
     $("fuelup-vehicle-kml").value = f.vehicleKmL ?? "";
+    $("fuelup-station-name").value = f.stationName || "";
+    $("fuelup-station-cnpj").value = f.stationCnpj || "";
     $("fuelup-notes").value = f.notes || "";
   } else {
     updateFuelupFuelTypeOptions();
@@ -488,6 +840,8 @@ function openFuelupModal(id) {
     setEngineHoursFields(null);
     $("fuelup-vehicle-avg-speed").value = "";
     $("fuelup-vehicle-kml").value = "";
+    $("fuelup-station-name").value = "";
+    $("fuelup-station-cnpj").value = "";
     $("fuelup-notes").value = "";
   }
   setFuelupMode("liters");
@@ -571,6 +925,8 @@ $("fuelup-form").addEventListener("submit", async (e) => {
     vehicleAvgSpeed: parseOptionalNumber($("fuelup-vehicle-avg-speed").value),
     vehicleKmL: parseOptionalNumber($("fuelup-vehicle-kml").value),
     nfceKey: $("fuelup-nfce-key").value.trim() || null,
+    stationName: $("fuelup-station-name").value.trim(),
+    stationCnpj: $("fuelup-station-cnpj").value.trim(),
     notes: $("fuelup-notes").value.trim(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -700,6 +1056,10 @@ function renderDashboard() {
   $("stat-month-liters").textContent = monthLiters > 0 ? monthLiters.toFixed(1) + " L" : "— L";
   $("stat-month-km").textContent = monthKmDisplay(scoped, thisMonth);
 
+  renderBudget(monthCost);
+  renderExchangeCalculator(scoped);
+  renderStationRanking(scoped);
+  renderVehicleComparison();
   renderCharts(allPoints, scoped);
 }
 
@@ -715,6 +1075,157 @@ function monthKmDisplay(scoped, thisMonth) {
     if (odos.length >= 2) total += Math.max(...odos) - Math.min(...odos);
   });
   return total > 0 ? fmtKm(total) + " km" : "— km";
+}
+
+/* ---------------- Orçamento mensal ---------------- */
+function renderBudget(monthCost) {
+  const card = $("budget-card");
+  let budget = null;
+  if (dashboardFilter === "all") {
+    const budgets = vehicles.filter((v) => !v.archived && v.monthlyBudget).map((v) => v.monthlyBudget);
+    if (budgets.length > 0) budget = budgets.reduce((s, b) => s + b, 0);
+  } else {
+    const v = vehicles.find((x) => x.id === dashboardFilter);
+    if (v && v.monthlyBudget) budget = v.monthlyBudget;
+  }
+  if (!budget) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  const pct = Math.min((monthCost / budget) * 100, 100);
+  const over = monthCost > budget;
+  $("budget-values").textContent = `${fmtMoney(monthCost)} de ${fmtMoney(budget)}`;
+  const fill = $("budget-fill");
+  fill.style.width = pct + "%";
+  fill.classList.toggle("over", over);
+  $("budget-note").textContent = over
+    ? `Passou do orçamento em ${fmtMoney(monthCost - budget)} este mês.`
+    : `Faltam ${fmtMoney(budget - monthCost)} para o limite do mês.`;
+}
+
+/* ---------------- Câmbio Gasolina x Etanol ---------------- */
+function getLatestPriceForFuel(list, type) {
+  const matches = list.filter((f) => f.fuelType === type).sort((a, b) => (a.date < b.date ? 1 : -1));
+  return matches.length ? Number(matches[0].pricePerLiter) : null;
+}
+
+function renderExchangeCalculator(scoped) {
+  const gasInput = $("exchange-gas-price");
+  const ethInput = $("exchange-ethanol-price");
+  // só preenche automaticamente se o usuário ainda não editou o campo nesta sessão
+  if (!gasInput.dataset.touched) {
+    let gasPrice = null;
+    for (const t of ["gasolina", "gasolina-aditivada", "gasolina-premium"]) {
+      gasPrice = getLatestPriceForFuel(scoped, t) || getLatestPriceForFuel(fuelups, t);
+      if (gasPrice) break;
+    }
+    if (gasPrice) gasInput.value = gasPrice.toFixed(2);
+  }
+  if (!ethInput.dataset.touched) {
+    const ethPrice = getLatestPriceForFuel(scoped, "etanol") || getLatestPriceForFuel(fuelups, "etanol");
+    if (ethPrice) ethInput.value = ethPrice.toFixed(2);
+  }
+  updateExchangeResult();
+}
+
+function updateExchangeResult() {
+  const gas = parseFloat($("exchange-gas-price").value);
+  const eth = parseFloat($("exchange-ethanol-price").value);
+  const verdictEl = $("exchange-verdict");
+  const ratioEl = $("exchange-ratio");
+  if (!(gas > 0) || !(eth > 0)) {
+    verdictEl.textContent = "—";
+    verdictEl.className = "";
+    ratioEl.textContent = "Informe os dois preços";
+    return;
+  }
+  const ratio = eth / gas;
+  if (ratio <= 0.7) {
+    verdictEl.textContent = "Etanol compensa";
+    verdictEl.className = "good";
+  } else {
+    verdictEl.textContent = "Gasolina compensa";
+    verdictEl.className = "bad";
+  }
+  ratioEl.textContent = `Etanol está em ${(ratio * 100).toFixed(1)}% do preço da gasolina`;
+}
+$("exchange-gas-price").addEventListener("input", (e) => { e.target.dataset.touched = "1"; updateExchangeResult(); });
+$("exchange-ethanol-price").addEventListener("input", (e) => { e.target.dataset.touched = "1"; updateExchangeResult(); });
+
+/* ---------------- Ranking de postos ---------------- */
+function renderStationRanking(scoped) {
+  const card = $("ranking-card");
+  const withStation = scoped.filter((f) => f.stationCnpj || f.stationName);
+  if (withStation.length === 0) {
+    card.hidden = true;
+    return;
+  }
+  const groups = {};
+  withStation.forEach((f) => {
+    const key = f.stationCnpj || "name:" + (f.stationName || "").toLowerCase();
+    if (!groups[key]) groups[key] = { name: f.stationName || f.stationCnpj || "Posto sem nome", cnpj: f.stationCnpj || null, entries: [] };
+    if (f.stationName) groups[key].name = f.stationName;
+    groups[key].entries.push(f);
+  });
+  const rows = Object.values(groups)
+    .map((g) => {
+      const prices = g.entries.map((f) => Number(f.pricePerLiter));
+      return { name: g.name, cnpj: g.cnpj, visits: g.entries.length, avgPrice: prices.reduce((s, v) => s + v, 0) / prices.length };
+    })
+    .sort((a, b) => a.avgPrice - b.avgPrice);
+
+  card.hidden = false;
+  $("ranking-list").innerHTML = rows.map((r, i) => `
+    <div class="ranking-item">
+      <span class="ranking-rank">${i + 1}</span>
+      <div class="ranking-info">
+        <div class="ranking-name">${escapeHtml(r.name)}</div>
+        <div class="ranking-meta">${r.visits} abastecimento${r.visits === 1 ? "" : "s"}${r.cnpj ? " · " + r.cnpj : ""}</div>
+      </div>
+      <div class="ranking-price">${fmtMoney(r.avgPrice)}/L</div>
+    </div>`).join("");
+}
+
+/* ---------------- Comparação entre veículos ---------------- */
+function renderVehicleComparison() {
+  const card = $("compare-card");
+  if (dashboardFilter !== "all") {
+    card.hidden = true;
+    return;
+  }
+  const active = vehicles.filter((v) => !v.archived);
+  if (active.length < 2) {
+    card.hidden = true;
+    return;
+  }
+
+  const rows = active.map((v) => {
+    const vFuelups = fuelups.filter((f) => f.vehicleId === v.id);
+    const fuelCost = vFuelups.reduce((s, f) => s + Number(f.totalCost || 0), 0);
+    const expenseCost = expenses.filter((x) => x.vehicleId === v.id).reduce((s, x) => s + Number(x.amount || 0), 0);
+    const maintCost = maintenances.filter((m) => m.vehicleId === v.id).reduce((s, m) => s + Number(m.cost || 0), 0);
+    const totalCost = fuelCost + expenseCost + maintCost;
+    const odos = vFuelups.map((f) => f.odometer);
+    const km = odos.length >= 2 ? Math.max(...odos) - Math.min(...odos) : 0;
+    return { name: v.name, icon: vehicleIcon(v.type), totalCost, km, costPerKm: km > 0 ? totalCost / km : null };
+  }).filter((r) => r.totalCost > 0);
+
+  if (rows.length < 2) {
+    card.hidden = true;
+    return;
+  }
+  rows.sort((a, b) => (a.costPerKm ?? Infinity) - (b.costPerKm ?? Infinity));
+
+  card.hidden = false;
+  $("compare-list").innerHTML = rows.map((r) => `
+    <div class="compare-item">
+      <div class="compare-info">
+        <div class="compare-name">${r.icon} ${escapeHtml(r.name)}</div>
+        <div class="compare-meta">${fmtMoney(r.totalCost)} total${r.km > 0 ? " · " + fmtKm(r.km) + " km" : ""}</div>
+      </div>
+      <div class="compare-value">${r.costPerKm !== null ? fmtMoney(r.costPerKm) + "/km" : "—"}</div>
+    </div>`).join("");
 }
 
 function updateGauge(avgKmL) {
@@ -1198,12 +1709,13 @@ function applyNfceResult(result) {
     recomputeFuelupFields();
   }
   if (result.date) $("fuelup-date").value = result.date;
-  if (result.key) {
-    $("fuelup-nfce-key").value = result.key;
-    const notesEl = $("fuelup-notes");
-    const tag = "NFC-e " + result.key.slice(-8);
-    if (!notesEl.value.includes(tag)) {
-      notesEl.value = notesEl.value ? notesEl.value + " · " + tag : tag;
+  if (result.key) $("fuelup-nfce-key").value = result.key;
+  if (result.cnpj) {
+    $("fuelup-station-cnpj").value = result.cnpj;
+    // se já lançamos abastecimento nesse mesmo posto antes, sugere o nome salvo
+    if (!$("fuelup-station-name").value.trim()) {
+      const known = fuelups.find((f) => f.stationCnpj === result.cnpj && f.stationName);
+      if (known) $("fuelup-station-name").value = known.stationName;
     }
   }
   $("nfce-preview").hidden = true;

@@ -5,13 +5,19 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 ## Funcionalidades
 
 - **Login por e-mail e senha** (Firebase Authentication)
-- **Veículos**: cadastro de múltiplos veículos (moto/carro), apelido, placa, capacidade do tanque (conforme o manual), combustíveis aceitos (opcional, também conforme o manual — filtra o seletor de combustível ao abastecer esse veículo), arquivar ou excluir
-- **Abastecimentos**: km, litros, valor total, tipo de combustível (Gasolina, Gasolina Aditivada, Gasolina Premium, Etanol, Diesel S10), se foi tanque cheio
+- **Veículos**: cadastro de múltiplos veículos (moto/carro), apelido, placa, capacidade do tanque (conforme o manual), combustíveis aceitos (opcional, também conforme o manual — filtra o seletor de combustível ao abastecer esse veículo), orçamento mensal de combustível, arquivar ou excluir
+- **Abastecimentos**: km, litros, valor total, tipo de combustível (Gasolina, Gasolina Aditivada, Gasolina Premium, Etanol, Diesel S10), se foi tanque cheio, posto (nome e CNPJ, separados de observação livre)
   - Dois jeitos de calcular: informe **litros + total** (calcula o R$/litro) ou, sem o cupom em mãos, informe **total pago no cartão + preço do litro anotado na bomba** (calcula os litros)
   - Aviso automático (não bloqueia) se os litros informados passarem da capacidade do tanque cadastrada
 - **Painel do veículo (opcional)**: tempo de motor ligado no tanque (em horas e minutos), velocidade média e consumo informados pelo computador de bordo — o app calcula os mesmos valores a partir do km e litros e mostra os dois lado a lado, com o desvio percentual, pra você conferir
-- **Importação por NFC-e**: escaneie o QR Code do cupom fiscal (pela câmera ou enviando uma foto) ou cole o código/URL manualmente, para preencher automaticamente valor total, data e o CNPJ do posto — veja limitações abaixo
+- **Importação por NFC-e**: escaneie o QR Code do cupom fiscal (pela câmera ou enviando uma foto) ou cole o código/URL manualmente, para preencher automaticamente valor total, data e o CNPJ do posto (com sugestão do nome do posto se você já lançou algo lá antes) — veja limitações abaixo
 - **Painel** com ponteiro de km/l médio, gasto do mês, preço médio, km rodados e litros
+- **Orçamento mensal**: barra de progresso do gasto do mês contra o orçamento definido no(s) veículo(s)
+- **Calculadora Gasolina × Etanol**: compara os últimos preços registrados (ou valores que você digitar na hora) e diz qual compensa, pela regra dos 70%
+- **Ranking de postos**: agrupa os abastecimentos por posto (nome/CNPJ) e mostra o preço médio pago em cada um, do mais barato ao mais caro
+- **Comparação entre veículos**: custo total (combustível + despesas + manutenção) por km rodado, lado a lado, quando "Todos os veículos" está selecionado
+- **Manutenção**: registro de manutenções por veículo (óleo, filtros, pneus, freios, revisão, etc.) com intervalo por km e/ou por meses; o Painel de Manutenção avisa quando alguma está vencendo ou vencida, comparando com o odômetro mais recente
+- **Despesas**: IPVA, seguro, licenciamento, estacionamento, multa, lavagem, pedágio e outras, por veículo
 - **Gráficos**: consumo (km/l), preço do combustível e gasto mensal ao longo do tempo
 - **Tema claro/escuro**, em Ajustes → Aparência (preferência salva no aparelho)
 - **Backup e restauração no Firestore**, em Ajustes → Backup: "Criar backup agora" grava um snapshot dos seus veículos e abastecimentos numa coleção própria (`users/{uid}/backups`) — não é um arquivo, fica dentro da sua conta. A lista de backups mostra data/hora e quantidade de registros, com "Restaurar" (atualiza pelo mesmo ID, sem apagar nada) e excluir
@@ -50,7 +56,7 @@ service cloud.firestore {
 }
 ```
 
-Cada usuário só enxerga e grava os próprios dados, em `users/{uid}/vehicles`, `users/{uid}/fuelups` e `users/{uid}/backups`. A regra com `{document=**}` já cobre as três — não precisa mexer nela ao adicionar a coleção de backups.
+Cada usuário só enxerga e grava os próprios dados, em `users/{uid}/vehicles`, `users/{uid}/fuelups`, `users/{uid}/maintenances`, `users/{uid}/expenses` e `users/{uid}/backups`. A regra com `{document=**}` já cobre todas — não precisa mexer nela ao adicionar coleções novas.
 
 ## Publicando no GitHub Pages
 

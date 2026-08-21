@@ -352,6 +352,96 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
   border-radius: var(--radius);
 }
 
+/* ================= ORÇAMENTO ================= */
+.budget-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.budget-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-dim); }
+.budget-head span:last-child { font-family: var(--font-mono); color: var(--text); font-weight: 600; }
+.budget-track { height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.budget-fill { height: 100%; background: var(--amber); border-radius: 999px; transition: width .4s ease, background-color .3s ease; }
+.budget-fill.over { background: var(--red); }
+.budget-note { font-size: 11px; color: var(--text-faint); margin: 0; }
+
+/* ================= CÂMBIO GASOLINA X ETANOL ================= */
+.exchange-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.exchange-card h3 { font-size: 13px; }
+.exchange-inputs { display: flex; gap: 10px; }
+.exchange-inputs .field { flex: 1; }
+.exchange-result {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  background: var(--panel-2);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+#exchange-verdict { font-family: var(--font-display); font-size: 20px; letter-spacing: 0.02em; }
+#exchange-verdict.good { color: var(--teal); }
+#exchange-verdict.bad { color: var(--red); }
+.exchange-ratio { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); }
+
+/* ================= RANKING DE POSTOS ================= */
+.ranking-card, .compare-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 14px;
+}
+.ranking-card h3, .compare-card h3 { font-size: 13px; margin-bottom: 10px; }
+.ranking-list, .compare-list { display: flex; flex-direction: column; gap: 8px; }
+.ranking-item, .compare-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--panel-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.ranking-rank {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--amber); color: #1A1200;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ranking-info, .compare-info { flex: 1; min-width: 0; }
+.ranking-name, .compare-name { font-size: 13px; font-weight: 600; }
+.ranking-meta, .compare-meta { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.ranking-price, .compare-value { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--amber); text-align: right; flex-shrink: 0; }
+
+/* ================= MANUTENÇÃO ================= */
+.due-list { display: flex; flex-direction: column; gap: 8px; }
+.due-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(194,86,74,0.10);
+  border: 1px solid rgba(194,86,74,0.30);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.due-item.warning { background: rgba(232,162,61,0.10); border-color: rgba(232,162,61,0.30); }
+.due-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.due-meta { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.due-badge { font-size: 10px; font-family: var(--font-mono); padding: 3px 8px; border-radius: 999px; background: var(--red); color: #fff; flex-shrink: 0; }
+.due-badge.warning { background: var(--amber); color: #1A1200; }
+
 /* ================= LISTS ================= */
 .entry-list, .vehicle-list { display: flex; flex-direction: column; gap: 10px; }
 
@@ -442,6 +532,19 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 }
 .settings-tab-btn.active { background: var(--amber); color: #1A1200; }
 .settings-pane { display: flex; flex-direction: column; gap: 12px; }
+.maint-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 4px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.maint-tab-btn.active { background: var(--amber); color: #1A1200; }
+.maint-pane { display: flex; flex-direction: column; gap: 12px; }
 
 .settings-card { display: flex; flex-direction: column; gap: 12px; }
 .settings-row {

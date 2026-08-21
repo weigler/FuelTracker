@@ -119,6 +119,34 @@
         </div>
       </div>
 
+      <div class="budget-card" id="budget-card" hidden>
+        <div class="budget-head">
+          <span>Orçamento do mês</span>
+          <span id="budget-values">—</span>
+        </div>
+        <div class="budget-track"><div class="budget-fill" id="budget-fill"></div></div>
+        <p class="budget-note" id="budget-note"></p>
+      </div>
+
+      <div class="exchange-card">
+        <h3>Câmbio: Gasolina × Etanol</h3>
+        <div class="exchange-inputs">
+          <label class="field">
+            <span>Gasolina (R$/L)</span>
+            <input type="number" id="exchange-gas-price" min="0" step="0.01" inputmode="decimal" />
+          </label>
+          <label class="field">
+            <span>Etanol (R$/L)</span>
+            <input type="number" id="exchange-ethanol-price" min="0" step="0.01" inputmode="decimal" />
+          </label>
+        </div>
+        <div class="exchange-result" id="exchange-result">
+          <span id="exchange-verdict">—</span>
+          <span class="exchange-ratio" id="exchange-ratio"></span>
+        </div>
+        <p class="field-hint">Preenchido com os últimos preços que você registrou; edite para simular outros valores da bomba. Regra usada: etanol compensa até ~70% do preço da gasolina (menor densidade energética).</p>
+      </div>
+
       <div class="chart-card">
         <h3>Consumo ao longo do tempo (km/l)</h3>
         <canvas id="chart-consumption"></canvas>
@@ -132,6 +160,16 @@
       <div class="chart-card">
         <h3>Gasto por mês (R$)</h3>
         <canvas id="chart-cost"></canvas>
+      </div>
+
+      <div class="ranking-card" id="ranking-card" hidden>
+        <h3>Ranking de postos</h3>
+        <div id="ranking-list" class="ranking-list"></div>
+      </div>
+
+      <div class="compare-card" id="compare-card" hidden>
+        <h3>Comparação entre veículos</h3>
+        <div id="compare-list" class="compare-list"></div>
       </div>
 
       <p id="dashboard-empty" class="empty-state" hidden>
@@ -161,6 +199,31 @@
         <h3>Arquivados</h3>
       </div>
       <div id="vehicles-archived-list" class="vehicle-list"></div>
+    </section>
+
+    <!-- ---------- MANUTENÇÃO ---------- -->
+    <section id="view-maintenance" class="view" hidden>
+      <div class="view-head">
+        <h2>Manutenção</h2>
+      </div>
+
+      <div class="settings-tabs">
+        <button class="maint-tab-btn active" data-maint-tab="maintenances">Manutenções</button>
+        <button class="maint-tab-btn" data-maint-tab="expenses">Despesas</button>
+      </div>
+
+      <div class="maint-pane" id="maint-pane-maintenances">
+        <button class="btn btn-primary btn-sm" id="add-maintenance-btn">+ Nova manutenção</button>
+        <div id="maintenance-due-list" class="due-list"></div>
+        <div id="maintenance-list" class="entry-list"></div>
+        <p id="maintenance-empty" class="empty-state" hidden>Nenhuma manutenção registrada ainda.</p>
+      </div>
+
+      <div class="maint-pane" id="maint-pane-expenses" hidden>
+        <button class="btn btn-primary btn-sm" id="add-expense-btn">+ Nova despesa</button>
+        <div id="expense-list" class="entry-list"></div>
+        <p id="expense-empty" class="empty-state" hidden>Nenhuma despesa registrada ainda.</p>
+      </div>
     </section>
 
     <!-- ---------- AJUSTES ---------- -->
@@ -250,6 +313,9 @@
     </button>
     <button class="tab-btn" data-view="vehicles">
       <span class="tab-icon">🏍</span><span>Veículos</span>
+    </button>
+    <button class="tab-btn" data-view="maintenance">
+      <span class="tab-icon">🔧</span><span>Manutenção</span>
     </button>
     <button class="tab-btn" data-view="settings">
       <span class="tab-icon">⚙</span><span>Ajustes</span>
@@ -352,8 +418,18 @@
         </label>
       </div>
 
+      <div class="field-row">
+        <label class="field">
+          <span>Posto (opcional)</span>
+          <input type="text" id="fuelup-station-name" maxlength="60" placeholder="Ex.: Posto Ipiranga Centro" />
+        </label>
+        <label class="field">
+          <span>CNPJ do posto (opcional)</span>
+          <input type="text" id="fuelup-station-cnpj" maxlength="18" placeholder="Preenchido pela NFC-e" />
+        </label>
+      </div>
       <label class="field">
-        <span>Posto / observação (opcional)</span>
+        <span>Observação (opcional)</span>
         <input type="text" id="fuelup-notes" maxlength="120" />
       </label>
       <p id="fuelup-error" class="auth-error" hidden></p>
@@ -393,6 +469,10 @@
         <span>Capacidade do tanque (L) — opcional</span>
         <input type="number" id="vehicle-tank-capacity" min="0" step="0.1" placeholder="Ex.: 14 (conforme o manual)" />
       </label>
+      <label class="field">
+        <span>Orçamento mensal de combustível (R$) — opcional</span>
+        <input type="number" id="vehicle-monthly-budget" min="0" step="10" placeholder="Ex.: 400" />
+      </label>
       <div class="field">
         <span>Combustíveis aceitos (opcional — conforme o manual)</span>
         <div class="checkbox-grid" id="vehicle-fuel-types">
@@ -408,6 +488,121 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="vehicle-archive-btn" hidden>Arquivar</button>
         <button type="button" class="btn btn-danger" id="vehicle-delete-btn" hidden>Excluir</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: MANUTENÇÃO ============ -->
+<div id="maintenance-modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="maintenance-modal-title">Nova manutenção</h3>
+      <button class="btn-icon" id="maintenance-modal-close" aria-label="Fechar">✕</button>
+    </div>
+    <form id="maintenance-form" class="form">
+      <input type="hidden" id="maintenance-id" />
+      <label class="field">
+        <span>Veículo</span>
+        <select id="maintenance-vehicle" required></select>
+      </label>
+      <label class="field">
+        <span>Tipo</span>
+        <select id="maintenance-type">
+          <option value="oleo">Troca de óleo</option>
+          <option value="filtro-oleo">Filtro de óleo</option>
+          <option value="filtro-ar">Filtro de ar</option>
+          <option value="filtro-combustivel">Filtro de combustível</option>
+          <option value="pneus">Pneus</option>
+          <option value="freios">Freios (pastilhas/lonas)</option>
+          <option value="bateria">Bateria</option>
+          <option value="alinhamento">Alinhamento/balanceamento</option>
+          <option value="revisao">Revisão geral</option>
+          <option value="correia">Correia dentada/acessórios</option>
+          <option value="outro">Outro</option>
+        </select>
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Data</span>
+          <input type="date" id="maintenance-date" required />
+        </label>
+        <label class="field">
+          <span>Odômetro (km)</span>
+          <input type="number" id="maintenance-odometer" min="0" step="1" required />
+        </label>
+      </div>
+      <label class="field">
+        <span>Custo (R$) — opcional</span>
+        <input type="number" id="maintenance-cost" min="0" step="0.01" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Repetir a cada (km) — opcional</span>
+          <input type="number" id="maintenance-interval-km" min="0" step="100" placeholder="Ex.: 5000" />
+        </label>
+        <label class="field">
+          <span>Repetir a cada (meses) — opcional</span>
+          <input type="number" id="maintenance-interval-months" min="0" step="1" placeholder="Ex.: 6" />
+        </label>
+      </div>
+      <label class="field">
+        <span>Observação (opcional)</span>
+        <input type="text" id="maintenance-notes" maxlength="120" />
+      </label>
+      <p id="maintenance-error" class="auth-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="maintenance-delete-btn" hidden>Excluir</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: DESPESA ============ -->
+<div id="expense-modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="expense-modal-title">Nova despesa</h3>
+      <button class="btn-icon" id="expense-modal-close" aria-label="Fechar">✕</button>
+    </div>
+    <form id="expense-form" class="form">
+      <input type="hidden" id="expense-id" />
+      <label class="field">
+        <span>Veículo</span>
+        <select id="expense-vehicle" required></select>
+      </label>
+      <label class="field">
+        <span>Categoria</span>
+        <select id="expense-category">
+          <option value="ipva">IPVA</option>
+          <option value="seguro">Seguro</option>
+          <option value="licenciamento">Licenciamento</option>
+          <option value="estacionamento">Estacionamento</option>
+          <option value="multa">Multa</option>
+          <option value="lavagem">Lavagem</option>
+          <option value="pedagio">Pedágio</option>
+          <option value="outro">Outra</option>
+        </select>
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Data</span>
+          <input type="date" id="expense-date" required />
+        </label>
+        <label class="field">
+          <span>Valor (R$)</span>
+          <input type="number" id="expense-amount" min="0" step="0.01" required />
+        </label>
+      </div>
+      <label class="field">
+        <span>Observação (opcional)</span>
+        <input type="text" id="expense-notes" maxlength="120" />
+      </label>
+      <p id="expense-error" class="auth-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="expense-delete-btn" hidden>Excluir</button>
         <button type="submit" class="btn btn-primary">Salvar</button>
       </div>
     </form>
