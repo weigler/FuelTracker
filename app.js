@@ -19,6 +19,11 @@ let charts = { consumption: null, price: null, cost: null };
 const $ = (id) => document.getElementById(id);
 const fmtMoney = (n) => "R$ " + (Number(n) || 0).toFixed(2).replace(".", ",");
 const fmtKm = (n) => Math.round(Number(n) || 0).toLocaleString("pt-BR");
+const fmtHoursMinutes = (decimalHours) => {
+  const h = Math.floor(decimalHours);
+  const min = Math.round((decimalHours - h) * 60);
+  return h > 0 ? `${h}h${min > 0 ? min + "min" : ""}` : `${min}min`;
+};
 const fmtDateBR = (isoDate) => {
   const [y, m, d] = isoDate.split("-");
   return `${d}/${m}/${y}`;
@@ -38,6 +43,43 @@ function parseOptionalNumber(v) {
   const n = parseFloat(v);
   return isFinite(n) && v !== "" ? n : null;
 }
+
+// Horas de motor são guardadas como decimal (ex.: 5.5), mas editadas em
+// dois campos separados (horas e minutos) para facilitar a digitação.
+function setEngineHoursFields(decimalHours) {
+  if (decimalHours === null || decimalHours === undefined || !(decimalHours > 0)) {
+    $("fuelup-engine-hours-h").value = "";
+    $("fuelup-engine-hours-min").value = "";
+    return;
+  }
+  const h = Math.floor(decimalHours);
+  const min = Math.round((decimalHours - h) * 60);
+  $("fuelup-engine-hours-h").value = h;
+  $("fuelup-engine-hours-min").value = min;
+}
+
+function getEngineHoursFromFields() {
+  const h = parseFloat($("fuelup-engine-hours-h").value) || 0;
+  const min = parseFloat($("fuelup-engine-hours-min").value) || 0;
+  if (h <= 0 && min <= 0) return null;
+  return Math.round((h + min / 60) * 100) / 100;
+}
+
+// Avisa (sem bloquear) quando os litros informados passam da capacidade do
+// tanque cadastrada para o veículo — ajuda a pegar erro de digitação.
+function checkTankCapacityWarning() {
+  const warnEl = $("fuelup-tank-warning");
+  const vehicleId = $("fuelup-vehicle").value;
+  const v = vehicles.find((x) => x.id === vehicleId);
+  const liters = parseFloat($("fuelup-liters").value);
+  if (!v || !v.tankCapacity || !(liters > 0) || liters <= v.tankCapacity) {
+    warnEl.hidden = true;
+    return;
+  }
+  warnEl.textContent = `Atenção: ${liters.toFixed(2)} L é mais do que a capacidade do tanque de ${escapeHtml(v.name)} (${v.tankCapacity} L). Confira o valor.`;
+  warnEl.hidden = false;
+}
+$("fuelup-vehicle").addEventListener("change", checkTankCapacityWarning);
 
 function vehicleIcon(type) {
   return type === "moto" ? "🏍" : "🚗";
@@ -228,7 +270,7 @@ function vehicleCardHtml(v) {
       <div class="vehicle-emblem">${vehicleIcon(v.type)}</div>
       <div class="vehicle-info">
         <div class="vehicle-name">${escapeHtml(v.name)}</div>
-        <div class="vehicle-meta">${v.type === "moto" ? "Moto" : "Carro"}${v.plate ? " · " + escapeHtml(v.plate) : ""} · ${count} abastecimento${count === 1 ? "" : "s"}</div>
+        <div class="vehicle-meta">${v.type === "moto" ? "Moto" : "Carro"}${v.plate ? " · " + escapeHtml(v.plate) : ""}${v.tankCapacity ? ` · Tanque: ${v.tankCapacity} L` : ""} · ${count} abastecimento${count === 1 ? "" : "s"}</div>
       </div>
       <div class="vehicle-chevron">›</div>
     </div>`;
@@ -243,6 +285,7 @@ function openVehicleModal(id) {
   $("vehicle-name").value = v ? v.name : "";
   $("vehicle-type").value = v ? v.type : "moto";
   $("vehicle-plate").value = v ? v.plate || "" : "";
+  $("vehicle-tank-capacity").value = v && v.tankCapacity !== null && v.tankCapacity !== undefined ? v.tankCapacity : "";
   $("vehicle-modal-title").textContent = v ? "Editar veículo" : "Novo veículo";
   $("vehicle-archive-btn").hidden = !v;
   $("vehicle-archive-btn").textContent = v && v.archived ? "Reativar" : "Arquivar";
@@ -258,6 +301,7 @@ $("vehicle-form").addEventListener("submit", async (e) => {
     name: $("vehicle-name").value.trim(),
     type: $("vehicle-type").value,
     plate: $("vehicle-plate").value.trim(),
+    tankCapacity: parseOptionalNumber($("vehicle-tank-capacity").value),
     archived: id ? (vehicles.find((v) => v.id === id) || {}).archived || false : false,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -342,7 +386,7 @@ function fuelupCardHtml(f, calc) {
       <div class="entry-icon">${icon}</div>
       <div class="entry-main">
         <div class="entry-title">${escapeHtml(vName)} · ${fmtDateBR(f.date)}${f.nfceKey ? '<span class="nfce-badge">NF</span>' : ""}</div>
-        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${fuelLabel(f.fuelType)}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${Number(f.engineHours).toFixed(1)}h motor` : ""}</div>
+        <div class="entry-sub">${fmtKm(f.odometer)} km · ${Number(f.liters).toFixed(2)} L · ${fuelLabel(f.fuelType)}${f.fullTank ? "" : " · parcial"}${f.engineHours ? ` · ${fmtHoursMinutes(f.engineHours)} motor` : ""}</div>
       </div>
       <div class="entry-metric">
         <strong>${fmtMoney(f.totalCost)}</strong>
@@ -367,6 +411,7 @@ function openFuelupModal(id) {
   $("nfce-preview").innerHTML = "";
   $("nfce-paste-box").hidden = true;
   $("nfce-paste-input").value = "";
+  $("fuelup-tank-warning").hidden = true;
   $("fuelup-modal-title").textContent = f ? "Editar abastecimento" : "Novo abastecimento";
   if (f) {
     $("fuelup-vehicle").value = f.vehicleId;
@@ -376,7 +421,7 @@ function openFuelupModal(id) {
     $("fuelup-total").value = f.totalCost;
     $("fuelup-fuel-type").value = f.fuelType;
     $("fuelup-full-tank").checked = f.fullTank !== false;
-    $("fuelup-engine-hours").value = f.engineHours ?? "";
+    setEngineHoursFields(f.engineHours);
     $("fuelup-vehicle-avg-speed").value = f.vehicleAvgSpeed ?? "";
     $("fuelup-vehicle-kml").value = f.vehicleKmL ?? "";
     $("fuelup-notes").value = f.notes || "";
@@ -387,7 +432,7 @@ function openFuelupModal(id) {
     $("fuelup-total").value = "";
     $("fuelup-fuel-type").value = "gasolina";
     $("fuelup-full-tank").checked = true;
-    $("fuelup-engine-hours").value = "";
+    setEngineHoursFields(null);
     $("fuelup-vehicle-avg-speed").value = "";
     $("fuelup-vehicle-kml").value = "";
     $("fuelup-notes").value = "";
@@ -440,6 +485,7 @@ function recomputeFuelupFields() {
     const price = parseFloat($("fuelup-price-per-liter").value);
     $("fuelup-liters").value = price > 0 && total > 0 ? (total / price).toFixed(2) : "";
   }
+  checkTankCapacityWarning();
 }
 $("fuelup-liters").addEventListener("input", recomputeFuelupFields);
 $("fuelup-total").addEventListener("input", recomputeFuelupFields);
@@ -468,7 +514,7 @@ $("fuelup-form").addEventListener("submit", async (e) => {
     pricePerLiter: Math.round((totalCost / liters) * 1000) / 1000,
     fuelType: $("fuelup-fuel-type").value,
     fullTank: $("fuelup-full-tank").checked,
-    engineHours: parseOptionalNumber($("fuelup-engine-hours").value),
+    engineHours: getEngineHoursFromFields(),
     vehicleAvgSpeed: parseOptionalNumber($("fuelup-vehicle-avg-speed").value),
     vehicleKmL: parseOptionalNumber($("fuelup-vehicle-kml").value),
     nfceKey: $("fuelup-nfce-key").value.trim() || null,

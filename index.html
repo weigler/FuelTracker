@@ -315,6 +315,7 @@
         <span>R$ por litro</span>
         <input type="text" id="fuelup-price-per-liter" readonly />
       </label>
+      <p class="field-hint field-warning" id="fuelup-tank-warning" hidden></p>
       <p class="field-hint" id="fuelup-mode-hint" hidden>
         Sem o cupom em mãos? Informe o valor total pago no cartão e o preço do litro anotado na bomba — os litros são calculados sozinhos.
       </p>
@@ -337,8 +338,11 @@
         <span>Painel do veículo (opcional, para comparar)</span>
       </div>
       <label class="field">
-        <span>Tempo de motor ligado neste tanque (h)</span>
-        <input type="number" id="fuelup-engine-hours" min="0" step="0.1" inputmode="decimal" placeholder="Ex.: 5.5" />
+        <span>Tempo de motor ligado neste tanque</span>
+        <div class="field-row">
+          <input type="number" id="fuelup-engine-hours-h" min="0" step="1" inputmode="numeric" placeholder="Horas" aria-label="Horas de motor" />
+          <input type="number" id="fuelup-engine-hours-min" min="0" max="59" step="1" inputmode="numeric" placeholder="Minutos" aria-label="Minutos de motor" />
+        </div>
       </label>
       <div class="field-row">
         <label class="field">
@@ -387,6 +391,10 @@
       <label class="field">
         <span>Placa (opcional)</span>
         <input type="text" id="vehicle-plate" maxlength="10" />
+      </label>
+      <label class="field">
+        <span>Capacidade do tanque (L) — opcional</span>
+        <input type="number" id="vehicle-tank-capacity" min="0" step="0.1" placeholder="Ex.: 14 (conforme o manual)" />
       </label>
       <p id="vehicle-error" class="auth-error" hidden></p>
       <div class="modal-actions">

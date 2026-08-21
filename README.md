@@ -5,10 +5,11 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 ## Funcionalidades
 
 - **Login por e-mail e senha** (Firebase Authentication)
-- **Veículos**: cadastro de múltiplos veículos (moto/carro), apelido, placa, arquivar ou excluir
+- **Veículos**: cadastro de múltiplos veículos (moto/carro), apelido, placa, capacidade do tanque (conforme o manual), arquivar ou excluir
 - **Abastecimentos**: km, litros, valor total, tipo de combustível (Gasolina, Gasolina Aditivada, Gasolina Premium, Etanol, Diesel S10), se foi tanque cheio
   - Dois jeitos de calcular: informe **litros + total** (calcula o R$/litro) ou, sem o cupom em mãos, informe **total pago no cartão + preço do litro anotado na bomba** (calcula os litros)
-- **Painel do veículo (opcional)**: tempo de motor ligado no tanque, velocidade média e consumo informados pelo computador de bordo — o app calcula os mesmos valores a partir do km e litros e mostra os dois lado a lado, com o desvio percentual, pra você conferir
+  - Aviso automático (não bloqueia) se os litros informados passarem da capacidade do tanque cadastrada
+- **Painel do veículo (opcional)**: tempo de motor ligado no tanque (em horas e minutos), velocidade média e consumo informados pelo computador de bordo — o app calcula os mesmos valores a partir do km e litros e mostra os dois lado a lado, com o desvio percentual, pra você conferir
 - **Importação por NFC-e**: escaneie o QR Code do cupom fiscal (pela câmera ou enviando uma foto) ou cole o código/URL manualmente, para preencher automaticamente valor total, data e o CNPJ do posto — veja limitações abaixo
 - **Painel** com ponteiro de km/l médio, gasto do mês, preço médio, km rodados e litros
 - **Gráficos**: consumo (km/l), preço do combustível e gasto mensal ao longo do tempo
