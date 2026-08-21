@@ -14,7 +14,7 @@ Controle de abastecimento, consumo e gastos da moto e do carro — PWA estático
 - **Painel** com ponteiro de km/l médio, gasto do mês, preço médio, km rodados e litros
 - **Gráficos**: consumo (km/l), preço do combustível e gasto mensal ao longo do tempo
 - **Tema claro/escuro**, em Ajustes → Aparência (preferência salva no aparelho)
-- **Backup e restauração** em JSON, em Ajustes → Backup: exportar tudo, ou restaurar um arquivo (atualiza registros existentes pelo ID, não apaga nada)
+- **Backup e restauração no Firestore**, em Ajustes → Backup: "Criar backup agora" grava um snapshot dos seus veículos e abastecimentos numa coleção própria (`users/{uid}/backups`) — não é um arquivo, fica dentro da sua conta. A lista de backups mostra data/hora e quantidade de registros, com "Restaurar" (atualiza pelo mesmo ID, sem apagar nada) e excluir
 - **Exportar relatório em PDF**, em Ajustes → Exportar PDF: filtra por período (semana, mês, tudo ou datas personalizadas), por veículo (um ou todos) e por tipo de combustível (um ou todos); o PDF sai estilizado, com cabeçalho colorido, cards de resumo (gasto total, preço médio, km rodados, consumo médio), mini-gráficos de gasto por mês e consumo ao longo do tempo, e a tabela detalhada dos abastecimentos
 - **PWA instalável**, funciona offline para a interface (dados do Firestore precisam de internet)
 
@@ -50,7 +50,7 @@ service cloud.firestore {
 }
 ```
 
-Cada usuário só enxerga e grava os próprios dados, em `users/{uid}/vehicles` e `users/{uid}/fuelups`.
+Cada usuário só enxerga e grava os próprios dados, em `users/{uid}/vehicles`, `users/{uid}/fuelups` e `users/{uid}/backups`. A regra com `{document=**}` já cobre as três — não precisa mexer nela ao adicionar a coleção de backups.
 
 ## Publicando no GitHub Pages
 

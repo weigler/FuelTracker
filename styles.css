@@ -327,10 +327,10 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px 14px 8px;
+  padding: 16px 14px 14px;
 }
 .chart-card h3 { margin-bottom: 10px; font-size: 13px; }
-.chart-card canvas { width: 100% !important; height: 190px !important; }
+.chart-card canvas { width: 100% !important; height: 250px !important; }
 
 .empty-state {
   text-align: center;
@@ -469,6 +469,21 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .pdf-period-row .mode-btn { flex: 1; min-width: 78px; }
 .pdf-custom-range { display: flex; gap: 10px; }
 .pdf-custom-range .field { flex: 1; }
+
+.backup-list { display: flex; flex-direction: column; gap: 8px; }
+.backup-item {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.backup-date { font-size: 13px; font-weight: 600; }
+.backup-meta { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.backup-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
 /* ================= TABBAR ================= */
 .tabbar {

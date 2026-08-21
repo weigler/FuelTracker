@@ -10,8 +10,10 @@ const db = firebase.firestore();
 let currentUser = null;
 let vehicles = [];      // todos os veículos do usuário
 let fuelups = [];       // todos os abastecimentos do usuário
+let backups = [];       // snapshots de backup guardados no Firestore
 let unsubVehicles = null;
 let unsubFuelups = null;
+let unsubBackups = null;
 let dashboardFilter = "all";
 let charts = { consumption: null, price: null, cost: null };
 
@@ -158,8 +160,10 @@ auth.onAuthStateChanged((user) => {
     $("auth-screen").hidden = false;
     if (unsubVehicles) unsubVehicles();
     if (unsubFuelups) unsubFuelups();
+    if (unsubBackups) unsubBackups();
     vehicles = [];
     fuelups = [];
+    backups = [];
   }
 });
 
@@ -180,6 +184,15 @@ function attachListeners(uid) {
     renderFuelups();
     renderDashboard();
   }, (err) => toast("Erro ao carregar abastecimentos: " + err.message));
+
+  unsubBackups = backupsCol().orderBy("createdAt", "desc").onSnapshot((snap) => {
+    backups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderBackups();
+  }, (err) => toast("Erro ao carregar backups: " + err.message));
+}
+
+function backupsCol() {
+  return db.collection("users").doc(currentUser.uid).collection("backups");
 }
 
 function vehiclesCol() {
@@ -702,18 +715,50 @@ const chartFont = { family: "IBM Plex Mono", size: 11 };
 const chartGridColor = "rgba(255,255,255,0.06)";
 const chartTextColor = "#A6A5A2";
 
-function baseChartOptions(yFormatter) {
+function baseChartOptions(tooltipFormatter, yTickFormatter) {
   return {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: {
-      callbacks: yFormatter ? { label: (ctx) => yFormatter(ctx.parsed.y) } : undefined
-    } },
+    layout: { padding: { top: 14, right: 10, left: 2, bottom: 0 } },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: tooltipFormatter ? { label: (ctx) => tooltipFormatter(ctx.parsed.y) } : undefined,
+      },
+    },
     scales: {
-      x: { ticks: { color: chartTextColor, font: chartFont, maxRotation: 0 }, grid: { color: "transparent" } },
-      y: { ticks: { color: chartTextColor, font: chartFont }, grid: { color: chartGridColor } },
+      x: {
+        ticks: {
+          color: chartTextColor,
+          font: chartFont,
+          autoSkip: true,
+          maxRotation: 60,
+          minRotation: 0,
+          padding: 6,
+        },
+        grid: { color: "transparent" },
+      },
+      y: {
+        beginAtZero: true,
+        grace: "12%",
+        ticks: {
+          color: chartTextColor,
+          font: chartFont,
+          padding: 8,
+          callback: yTickFormatter || ((v) => v),
+        },
+        grid: { color: chartGridColor },
+      },
     },
   };
+}
+
+// versão compacta pra caber no eixo (ex.: 1.234 -> "1,2k"); o valor completo
+// continua aparecendo na dica ao tocar/passar o mouse
+function compactNumber(v) {
+  const n = Number(v);
+  if (Math.abs(n) >= 1000) return (n / 1000).toFixed(1).replace(".", ",") + "k";
+  return n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ",");
 }
 
 function renderCharts(points, scoped) {
@@ -726,7 +771,7 @@ function renderCharts(points, scoped) {
       data: consData, borderColor: "#E8A23D", backgroundColor: "rgba(232,162,61,0.15)",
       fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: "#E8A23D",
     }] },
-    options: baseChartOptions((v) => v.toFixed(2) + " km/l"),
+    options: baseChartOptions((v) => v.toFixed(2) + " km/l", (v) => compactNumber(v)),
   });
 
   // ---- preço ----
@@ -739,7 +784,7 @@ function renderCharts(points, scoped) {
       data: priceData, borderColor: "#2B8C82", backgroundColor: "rgba(43,140,130,0.15)",
       fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: "#2B8C82",
     }] },
-    options: baseChartOptions((v) => fmtMoney(v)),
+    options: baseChartOptions((v) => fmtMoney(v), (v) => "R$ " + compactNumber(v)),
   });
 
   // ---- gasto por mês (últimos 6 meses) ----
@@ -761,7 +806,7 @@ function renderCharts(points, scoped) {
     data: { labels: monthLabels, datasets: [{
       data: costByMonth.map((v) => Number(v.toFixed(2))), backgroundColor: "#E8A23D", borderRadius: 6, maxBarThickness: 28,
     }] },
-    options: baseChartOptions((v) => fmtMoney(v)),
+    options: baseChartOptions((v) => fmtMoney(v), (v) => "R$ " + compactNumber(v)),
   });
 }
 
@@ -790,76 +835,108 @@ document.querySelectorAll(".theme-btn").forEach((btn) => {
   btn.addEventListener("click", () => applyTheme(btn.dataset.themeChoice));
 });
 
-/* ---------------- Exportar dados ---------------- */
-$("export-btn").addEventListener("click", () => {
-  const payload = { exportedAt: new Date().toISOString(), vehicles, fuelups };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `tanque-cheio-backup-${todayISO()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast("Backup exportado.");
+/* ================================================================
+   BACKUP NO FIRESTORE
+   ------------------------------------------------------------------
+   Em vez de baixar um arquivo, o backup é um snapshot salvo direto
+   em users/{uid}/backups/{id} — mesma conta, mesmas regras de
+   segurança de tudo o mais no app. Restaurar grava (upsert, pelo
+   mesmo ID) de volta em vehicles/fuelups; nada é apagado.
+   ================================================================ */
+
+$("create-backup-btn").addEventListener("click", async () => {
+  const btn = $("create-backup-btn");
+  btn.disabled = true;
+  try {
+    await backupsCol().add({
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      vehicles,
+      fuelups,
+      vehiclesCount: vehicles.length,
+      fuelupsCount: fuelups.length,
+    });
+    toast("Backup criado.");
+  } catch (err) {
+    toast("Erro ao criar backup: " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
-/* ---------------- Restaurar backup ---------------- */
-$("restore-btn").addEventListener("click", () => $("restore-file-input").click());
-$("restore-file-input").addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  e.target.value = "";
-  if (!file) return;
+function renderBackups() {
+  $("backups-empty").hidden = backups.length > 0;
+  $("backups-list").innerHTML = backups.map(backupItemHtml).join("");
+  document.querySelectorAll("[data-backup-restore]").forEach((el) => {
+    el.addEventListener("click", () => restoreBackup(el.dataset.backupRestore));
+  });
+  document.querySelectorAll("[data-backup-delete]").forEach((el) => {
+    el.addEventListener("click", () => deleteBackup(el.dataset.backupDelete));
+  });
+}
 
-  const statusEl = $("restore-status");
-  statusEl.hidden = false;
-  statusEl.textContent = "Lendo arquivo...";
+function backupItemHtml(b) {
+  const dt = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate() : null;
+  const dateLabel = dt
+    ? dt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "Agora mesmo";
+  const vCount = b.vehiclesCount ?? (b.vehicles || []).length;
+  const fCount = b.fuelupsCount ?? (b.fuelups || []).length;
+  return `
+    <div class="backup-item">
+      <div>
+        <div class="backup-date">${dateLabel}</div>
+        <div class="backup-meta">${vCount} veículo${vCount === 1 ? "" : "s"} · ${fCount} abastecimento${fCount === 1 ? "" : "s"}</div>
+      </div>
+      <div class="backup-actions">
+        <button type="button" class="btn btn-secondary btn-sm" data-backup-restore="${b.id}">Restaurar</button>
+        <button type="button" class="btn-icon" data-backup-delete="${b.id}" aria-label="Excluir backup" title="Excluir backup">🗑</button>
+      </div>
+    </div>`;
+}
 
-  let payload;
-  try {
-    payload = JSON.parse(await file.text());
-  } catch (err) {
-    statusEl.textContent = "Arquivo inválido — não parece um backup JSON do Tanque Cheio.";
-    return;
-  }
-
-  const vList = Array.isArray(payload.vehicles) ? payload.vehicles : [];
-  const fList = Array.isArray(payload.fuelups) ? payload.fuelups : [];
+async function restoreBackup(id) {
+  const b = backups.find((x) => x.id === id);
+  if (!b) return;
+  const vList = Array.isArray(b.vehicles) ? b.vehicles : [];
+  const fList = Array.isArray(b.fuelups) ? b.fuelups : [];
   if (vList.length === 0 && fList.length === 0) {
-    statusEl.textContent = "Não encontrei veículos ou abastecimentos nesse arquivo.";
+    toast("Esse backup está vazio.");
     return;
   }
-
-  if (!confirm(`Este backup tem ${vList.length} veículo(s) e ${fList.length} abastecimento(s). Registros com o mesmo ID serão atualizados; nada é apagado. Restaurar agora?`)) {
-    statusEl.hidden = true;
+  if (!confirm(`Restaurar este backup (${vList.length} veículo(s), ${fList.length} abastecimento(s))? Registros com o mesmo ID são atualizados; nada é apagado.`)) {
     return;
   }
-
-  statusEl.textContent = "Restaurando...";
+  toast("Restaurando...");
   try {
-    // Firestore permite até 500 operações por lote — divide se precisar
     const ops = [];
     vList.forEach((v) => {
-      const { id, ...data } = v;
-      ops.push(() => (id ? vehiclesCol().doc(id).set(data, { merge: true }) : vehiclesCol().add(data)));
+      const { id: vid, ...data } = v;
+      ops.push(() => (vid ? vehiclesCol().doc(vid).set(data, { merge: true }) : vehiclesCol().add(data)));
     });
     fList.forEach((f) => {
-      const { id, ...data } = f;
-      ops.push(() => (id ? fuelupsCol().doc(id).set(data, { merge: true }) : fuelupsCol().add(data)));
+      const { id: fid, ...data } = f;
+      ops.push(() => (fid ? fuelupsCol().doc(fid).set(data, { merge: true }) : fuelupsCol().add(data)));
     });
-
-    // set/add não se misturam bem num batch manual quando não há id (add gera doc novo);
-    // por simplicidade e robustez, executa em paralelo em lotes menores.
+    // Firestore permite até 500 operações por lote — divide em pedaços menores por segurança
     const chunkSize = 400;
     for (let i = 0; i < ops.length; i += chunkSize) {
-      const chunk = ops.slice(i, i + chunkSize);
-      await Promise.all(chunk.map((op) => op()));
+      await Promise.all(ops.slice(i, i + chunkSize).map((op) => op()));
     }
-    statusEl.textContent = `Restauração concluída: ${vList.length} veículo(s) e ${fList.length} abastecimento(s) processados.`;
     toast("Backup restaurado.");
   } catch (err) {
-    statusEl.textContent = "Erro ao restaurar: " + err.message;
+    toast("Erro ao restaurar: " + err.message);
   }
-});
+}
+
+async function deleteBackup(id) {
+  if (!confirm("Excluir este backup? Essa ação não pode ser desfeita.")) return;
+  try {
+    await backupsCol().doc(id).delete();
+    toast("Backup excluído.");
+  } catch (err) {
+    toast("Erro ao excluir: " + err.message);
+  }
+}
 
 /* ---------------- Service worker ---------------- */
 if ("serviceWorker" in navigator) {

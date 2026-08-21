@@ -195,14 +195,11 @@
 
       <!-- Backup -->
       <div class="settings-pane" id="settings-pane-backup" hidden>
-        <p class="settings-section-title">Exportar (Firestore)</p>
-        <p class="settings-hint">Exporta apenas os dados do Firestore desta conta: veículos e abastecimentos. Preferências do aparelho (como o tema) não entram no backup.</p>
-        <button class="btn btn-secondary btn-block" id="export-btn">Exportar backup do Firestore (JSON)</button>
-        <p class="settings-section-title">Restaurar (Firestore)</p>
-        <p class="settings-hint">Restaurar um backup grava (ou atualiza) veículos e abastecimentos no Firestore desta conta. Registros já existentes com o mesmo ID são atualizados; nada é apagado.</p>
-        <input type="file" id="restore-file-input" accept="application/json" hidden />
-        <button class="btn btn-secondary btn-block" id="restore-btn">Restaurar backup do Firestore (JSON)</button>
-        <p id="restore-status" class="settings-hint" hidden></p>
+        <p class="settings-section-title">Backup no Firestore</p>
+        <p class="settings-hint">Cria uma cópia de segurança dos seus veículos e abastecimentos guardada na sua própria conta do Firestore — não é um arquivo pra baixar. Você pode restaurar qualquer backup da lista quando quiser.</p>
+        <button class="btn btn-primary btn-block" id="create-backup-btn">Criar backup agora</button>
+        <div id="backups-list" class="backup-list"></div>
+        <p id="backups-empty" class="empty-state" hidden>Nenhum backup criado ainda.</p>
       </div>
 
       <!-- Exportar PDF -->
