@@ -953,6 +953,7 @@ function fuelupCardHtml(f, calc) {
   const icon = v ? vehicleIcon(v.type) : "❓";
 
   const chips = [
+    compareChip("trip", calc ? calc.calculatedTripKm : null, f.tripKm, " km", 0),
     compareChip("km/l", calc ? calc.kmPerLiter : null, f.vehicleKmL, "", 1),
     compareChip("vel. média", calc ? calc.calculatedAvgSpeed : null, f.vehicleAvgSpeed, " km/h", 0),
   ].filter(Boolean).join("");
@@ -998,6 +999,7 @@ function openFuelupModal(id) {
     $("fuelup-total").value = f.totalCost;
     $("fuelup-fuel-type").value = f.fuelType;
     $("fuelup-full-tank").checked = f.fullTank !== false;
+    $("fuelup-trip-km").value = f.tripKm ?? "";
     setEngineHoursFields(f.engineHours);
     $("fuelup-vehicle-avg-speed").value = f.vehicleAvgSpeed ?? "";
     $("fuelup-vehicle-kml").value = f.vehicleKmL ?? "";
@@ -1011,6 +1013,7 @@ function openFuelupModal(id) {
     $("fuelup-liters").value = "";
     $("fuelup-total").value = "";
     $("fuelup-full-tank").checked = true;
+    $("fuelup-trip-km").value = "";
     setEngineHoursFields(null);
     $("fuelup-vehicle-avg-speed").value = "";
     $("fuelup-vehicle-kml").value = "";
@@ -1096,6 +1099,7 @@ $("fuelup-form").addEventListener("submit", async (e) => {
     fuelType: $("fuelup-fuel-type").value,
     fullTank: $("fuelup-full-tank").checked,
     engineHours: getEngineHoursFromFields(),
+    tripKm: parseOptionalNumber($("fuelup-trip-km").value),
     vehicleAvgSpeed: parseOptionalNumber($("fuelup-vehicle-avg-speed").value),
     vehicleKmL: parseOptionalNumber($("fuelup-vehicle-kml").value),
     nfceKey: $("fuelup-nfce-key").value.trim() || null,
@@ -1152,19 +1156,28 @@ function computeConsumptionSeries(vehicleFuelups) {
     }
 
     if (f.fullTank !== false) {
-      if (lastCheckpointOdometer !== null && litersSinceCheckpoint > 0) {
-        const dist = f.odometer - lastCheckpointOdometer;
-        if (dist > 0) {
-          points.push({
-            id: f.id,
-            date: f.date,
-            odometer: f.odometer,
-            kmPerLiter: dist / litersSinceCheckpoint,
-            calculatedAvgSpeed: hoursKnown && hoursSinceCheckpoint > 0 ? dist / hoursSinceCheckpoint : null,
-            pricePerLiter: f.pricePerLiter,
-            totalCost: f.totalCost,
-          });
-        }
+      let dist = null;
+      let fromOdometer = false;
+      if (lastCheckpointOdometer !== null) {
+        dist = f.odometer - lastCheckpointOdometer;
+        fromOdometer = true;
+      } else if (f.tripKm && f.tripKm > 0) {
+        // sem abastecimento anterior pra comparar odômetro (ex.: primeiro
+        // registro do veículo) — usa o Trip do painel como distância inicial
+        dist = f.tripKm;
+      }
+
+      if (dist !== null && dist > 0 && litersSinceCheckpoint > 0) {
+        points.push({
+          id: f.id,
+          date: f.date,
+          odometer: f.odometer,
+          kmPerLiter: dist / litersSinceCheckpoint,
+          calculatedAvgSpeed: hoursKnown && hoursSinceCheckpoint > 0 ? dist / hoursSinceCheckpoint : null,
+          calculatedTripKm: fromOdometer ? dist : null,
+          pricePerLiter: f.pricePerLiter,
+          totalCost: f.totalCost,
+        });
       }
       lastCheckpointOdometer = f.odometer;
       litersSinceCheckpoint = 0;

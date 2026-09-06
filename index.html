@@ -424,6 +424,11 @@
         <span>Painel do veículo (opcional, para comparar)</span>
       </div>
       <label class="field">
+        <span>Trip do painel (km rodados neste tanque)</span>
+        <input type="number" id="fuelup-trip-km" min="0" step="1" inputmode="numeric" placeholder="Ex.: 412" />
+      </label>
+      <p class="field-hint">Se for o primeiro abastecimento cadastrado desse veículo (sem outro anterior pra comparar o odômetro), o Trip é usado como distância pra já calcular um consumo inicial.</p>
+      <label class="field">
         <span>Tempo de motor ligado neste tanque</span>
         <div class="field-row">
           <input type="number" id="fuelup-engine-hours-h" min="0" step="1" inputmode="numeric" placeholder="Horas" aria-label="Horas de motor" />
