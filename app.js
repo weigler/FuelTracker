@@ -953,7 +953,7 @@ function fuelupCardHtml(f, calc) {
   const icon = v ? vehicleIcon(v.type) : "❓";
 
   const chips = [
-    compareChip("trip", calc ? calc.calculatedTripKm : null, f.tripKm, " km", 0),
+    compareChip("trip", calc ? calc.calculatedTripKm : null, f.tripKm, " km", 1),
     compareChip("km/l", calc ? calc.kmPerLiter : null, f.vehicleKmL, "", 1),
     compareChip("vel. média", calc ? calc.calculatedAvgSpeed : null, f.vehicleAvgSpeed, " km/h", 0),
   ].filter(Boolean).join("");

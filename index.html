@@ -425,7 +425,7 @@
       </div>
       <label class="field">
         <span>Trip do painel (km rodados neste tanque)</span>
-        <input type="number" id="fuelup-trip-km" min="0" step="1" inputmode="numeric" placeholder="Ex.: 412" />
+        <input type="number" id="fuelup-trip-km" min="0" step="0.1" inputmode="decimal" placeholder="Ex.: 412.3" />
       </label>
       <p class="field-hint">Se for o primeiro abastecimento cadastrado desse veículo (sem outro anterior pra comparar o odômetro), o Trip é usado como distância pra já calcular um consumo inicial.</p>
       <label class="field">
@@ -446,16 +446,14 @@
         </label>
       </div>
 
-      <div class="field-row">
-        <label class="field">
-          <span>Posto (opcional)</span>
-          <input type="text" id="fuelup-station-name" maxlength="60" placeholder="Ex.: Posto Ipiranga Centro" />
-        </label>
-        <label class="field">
-          <span>CNPJ do posto (opcional)</span>
-          <input type="text" id="fuelup-station-cnpj" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" />
-        </label>
-      </div>
+      <label class="field">
+        <span>Posto (opcional)</span>
+        <input type="text" id="fuelup-station-name" maxlength="60" placeholder="Ex.: Posto Ipiranga Centro" />
+      </label>
+      <label class="field">
+        <span>CNPJ do posto (opcional)</span>
+        <input type="text" id="fuelup-station-cnpj" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" />
+      </label>
       <label class="field">
         <span>Observação (opcional)</span>
         <input type="text" id="fuelup-notes" maxlength="120" />
@@ -551,16 +549,14 @@
           <option value="outro">Outro</option>
         </select>
       </label>
-      <div class="field-row">
-        <label class="field">
-          <span>Data</span>
-          <input type="date" id="maintenance-date" required />
-        </label>
-        <label class="field">
-          <span>Odômetro (km)</span>
-          <input type="number" id="maintenance-odometer" min="0" step="1" required />
-        </label>
-      </div>
+      <label class="field">
+        <span>Data</span>
+        <input type="date" id="maintenance-date" required />
+      </label>
+      <label class="field">
+        <span>Odômetro (km)</span>
+        <input type="number" id="maintenance-odometer" min="0" step="1" required />
+      </label>
       <label class="field">
         <span>Custo (R$) — opcional</span>
         <input type="number" id="maintenance-cost" min="0" step="0.01" />
@@ -615,16 +611,14 @@
           <option value="outro">Outra</option>
         </select>
       </label>
-      <div class="field-row">
-        <label class="field">
-          <span>Data</span>
-          <input type="date" id="expense-date" required />
-        </label>
-        <label class="field">
-          <span>Valor (R$)</span>
-          <input type="number" id="expense-amount" min="0" step="0.01" required />
-        </label>
-      </div>
+      <label class="field">
+        <span>Data</span>
+        <input type="date" id="expense-date" required />
+      </label>
+      <label class="field">
+        <span>Valor (R$)</span>
+        <input type="number" id="expense-amount" min="0" step="0.01" required />
+      </label>
       <label class="field">
         <span>Observação (opcional)</span>
         <input type="text" id="expense-notes" maxlength="120" />

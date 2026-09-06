@@ -583,8 +583,7 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .pdf-filter-grid { display: flex; flex-direction: column; gap: 12px; }
 .pdf-period-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .pdf-period-row .mode-btn { flex: 1; min-width: 78px; }
-.pdf-custom-range { display: flex; gap: 10px; }
-.pdf-custom-range .field { flex: 1; }
+.pdf-custom-range { display: flex; flex-direction: column; gap: 12px; }
 
 .backup-list { display: flex; flex-direction: column; gap: 8px; }
 .backup-item {
