@@ -100,7 +100,7 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
 .gauge-hub { fill: var(--text); }
 
 .auth-form { display: flex; flex-direction: column; gap: 14px; }
-.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); min-width: 0; }
 .field input, .field select {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -108,6 +108,8 @@ h3 { font-size: 18px; color: var(--text-dim); text-transform: uppercase; letter-
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   font-size: 16px;
+  width: 100%;
+  min-width: 0;
 }
 .field input:focus, .field select:focus { border-color: var(--amber); }
 .field-row { display: flex; gap: 10px; }
